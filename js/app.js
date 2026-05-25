@@ -218,7 +218,7 @@ function render() {
 
     drawLabel(node, start, end, color, depth);
     if (node.image) drawImage(node);          // image IS the node, centred on its point
-    else drawHandle(node, color);             // otherwise a small grab handle
+    drawHandle(node, color);                  // grab handle on top — the ONLY drag target
   }
 }
 
@@ -312,11 +312,21 @@ function drawImage(node) {
 }
 
 function drawHandle(node, color) {
+  // Larger transparent hit area + a visible dot, so it is easy to grab.
+  const hit = document.createElementNS(SVG_NS, "circle");
+  hit.setAttribute("class", "handle handle-hit");
+  hit.setAttribute("cx", node.x);
+  hit.setAttribute("cy", node.y);
+  hit.setAttribute("r", 13);
+  hit.setAttribute("fill", "transparent");
+  hit.dataset.id = node.id;
+  gNodes.appendChild(hit);
+
   const h = document.createElementNS(SVG_NS, "circle");
   h.setAttribute("class", "handle" + (node.id === selectedId ? " selected" : ""));
   h.setAttribute("cx", node.x);
   h.setAttribute("cy", node.y);
-  h.setAttribute("r", node.id === selectedId ? 6 : 4);
+  h.setAttribute("r", node.id === selectedId ? 7 : 5);
   h.setAttribute("fill", color);
   h.dataset.id = node.id;
   gNodes.appendChild(h);
@@ -437,12 +447,15 @@ editor.addEventListener("blur", commitEdit);
 let drag = null;
 
 svg.addEventListener("mousedown", (e) => {
-  const t = e.target.closest("[data-id]");
+  const handle = e.target.closest(".handle");          // ONLY handles start a drag
+  const idEl = e.target.closest("[data-id]");
   const world = screenToWorld(e.clientX, e.clientY);
-  if (t) {
-    const id = t.dataset.id;
+  if (handle) {
+    const id = handle.dataset.id;
     select(id);
     drag = { id, startSX: e.clientX, startSY: e.clientY, lastX: world.x, lastY: world.y, moved: false };
+  } else if (idEl) {
+    select(idEl.dataset.id);                            // click text/branch/image = select only
   } else {
     drag = { pan: true, startX: e.clientX, startY: e.clientY, camX: cam.x, camY: cam.y };
     svg.classList.add("panning");
