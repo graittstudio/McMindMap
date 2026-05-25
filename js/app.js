@@ -62,12 +62,16 @@ function resolvedColor(node) {
 
 // ---- Persistence ----------------------------------------------------------
 
+const changeListeners = [];
+function notifyChange() { changeListeners.forEach((cb) => { try { cb(); } catch (e) {} }); }
+
 function save() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       nodes: state.nodes, rootId: state.rootId, nextId, cam,
     }));
   } catch (e) { /* storage may be unavailable */ }
+  notifyChange();
 }
 
 function load() {
@@ -504,10 +508,6 @@ $("btn-add-sibling").addEventListener("click", () => selectedId && addSibling(se
 $("btn-delete").addEventListener("click", () => selectedId && removeSubtree(selectedId));
 $("btn-image").addEventListener("click", () => selectedId && $("image-input").click());
 $("btn-fit").addEventListener("click", fit);
-$("btn-new").addEventListener("click", () => {
-  if (!confirm("Discard the current mindmap and start a new one?")) return;
-  freshDoc(); render(); centerRoot(); render(); save();
-});
 $("btn-export").addEventListener("click", () => {
   const blob = new Blob([JSON.stringify({ nodes: state.nodes, rootId: state.rootId, nextId }, null, 2)],
     { type: "application/json" });
@@ -559,5 +559,21 @@ function boot() {
   applyCamera();
 }
 
+// External control surface for the shell (auth / server persistence).
+window.MindMap = {
+  boot,
+  fit,
+  newDoc() { freshDoc(); render(); centerRoot(); render(); },
+  getDoc() { return { nodes: state.nodes, rootId: state.rootId, nextId }; },
+  loadDoc(doc) {
+    if (!doc || !doc.nodes || !doc.rootId) { this.newDoc(); return; }
+    state = { nodes: doc.nodes, rootId: doc.rootId };
+    nextId = doc.nextId || (Object.keys(doc.nodes).length + 1);
+    selectedId = state.rootId;
+    render(); fit();
+  },
+  onChange(cb) { changeListeners.push(cb); },
+};
+
 window.addEventListener("resize", applyCamera);
-boot();
+if (!window.__MCM_DEFER_BOOT__) boot();
