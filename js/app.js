@@ -325,8 +325,8 @@ function drawAddButtons(node) {
     const start = attachStart(state.nodes[node.parentId], node);
     let ux = node.x - start.x, uy = node.y - start.y;
     const len = Math.hypot(ux, uy) || 1; ux /= len; uy /= len;
-    childP = { x: node.x + ux * 30, y: node.y + uy * 30 };          // outward = new branch
-    sibP = { x: node.x - uy * 30, y: node.y + ux * 30 };            // perpendicular = sibling
+    childP = { x: node.x + ux * 40, y: node.y + uy * 40 };          // outward = new branch
+    sibP = { x: node.x - uy * 40, y: node.y + ux * 40 };            // perpendicular = sibling
   }
   addBtn(childP.x, childP.y, node.id, "child", color, true);
   if (sibP) addBtn(sibP.x, sibP.y, node.id, "sibling", color, false);
@@ -519,6 +519,12 @@ svg.addEventListener("mousedown", (e) => {
 
 window.addEventListener("mousemove", (e) => {
   if (!drag) return;
+  // If no mouse button is held, a mouseup was missed (e.g. released off-window).
+  // Stop here so the node never "follows" the cursor and shoots off later.
+  if (e.buttons === 0) {
+    if (!drag.pan && drag.moved) save();
+    drag = null; svg.classList.remove("panning"); return;
+  }
   if (drag.pan) {
     cam.x = drag.camX + (e.clientX - drag.startX);
     cam.y = drag.camY + (e.clientY - drag.startY);
