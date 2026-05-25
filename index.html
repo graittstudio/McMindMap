@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>McMindMap</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header id="toolbar">
+    <span class="brand">McMindMap</span>
+    <div class="group">
+      <button id="btn-add-child" title="Add branch (Tab)">+ Branch</button>
+      <button id="btn-add-sibling" title="Add sibling (Enter)">+ Sibling</button>
+      <button id="btn-delete" title="Delete branch (Del)">Delete</button>
+      <button id="btn-image" title="Attach a picture to the selected branch">+ Image</button>
+    </div>
+    <div class="group">
+      <label class="swatches" id="swatches" title="Branch colour"></label>
+    </div>
+    <div class="group">
+      <button id="btn-fit" title="Fit to screen">Fit</button>
+      <button id="btn-new">New</button>
+      <button id="btn-export">Export</button>
+      <button id="btn-import">Import</button>
+      <input type="file" id="file-input" accept="application/json" hidden />
+      <input type="file" id="image-input" accept="image/*" hidden />
+    </div>
+    <span class="hint">Double-click a branch to rename · drag the tip to move · double-click canvas to add</span>
+  </header>
+
+  <svg id="canvas" xmlns="http://www.w3.org/2000/svg">
+    <g id="viewport">
+      <g id="branches"></g>
+      <g id="nodes"></g>
+    </g>
+  </svg>
+
+  <input id="editor" type="text" autocomplete="off" spellcheck="false" hidden />
+
+  <script src="js/app.js"></script>
+</body>
+</html>
