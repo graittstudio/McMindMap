@@ -15,9 +15,12 @@ lint:
   stage: lint
   script:
     - test -f index.html || (echo "index.html missing" && exit 1)
-    - test -f js/app.js  || (echo "js/app.js missing"  && exit 1)
+    - test -f login.html || (echo "login.html missing" && exit 1)
+    - php --version
+    - 'echo "PHP syntax check…"; for f in api/*.php; do php -l "$f"; done'
+    - 'if find . -name "*.db" -not -path "./.git/*" | grep -q .; then echo "DB file committed!"; exit 1; fi'
     - export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && nvm use 20 || true
-    - node --check js/app.js
+    - 'for f in js/app.js js/shell.js js/auth.js; do node --check "$f"; done'
     - echo "OK"
 
 # ── Deploy ──────────────────────────────────────────────────────────────────
