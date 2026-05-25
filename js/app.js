@@ -71,7 +71,30 @@ function save() {
       nodes: state.nodes, rootId: state.rootId, nextId, cam,
     }));
   } catch (e) { /* storage may be unavailable */ }
+  pushHistory();
   notifyChange();
+}
+
+// ---- Undo history ---------------------------------------------------------
+
+let undoStack = [];
+function snapshotDoc() { return JSON.stringify({ nodes: state.nodes, rootId: state.rootId, nextId }); }
+function resetHistory() { undoStack = [snapshotDoc()]; }
+function pushHistory() {
+  const s = snapshotDoc();
+  if (undoStack.length && undoStack[undoStack.length - 1] === s) return;  // skip no-ops (pan/zoom)
+  undoStack.push(s);
+  if (undoStack.length > 120) undoStack.shift();
+}
+function undo() {
+  if (undoStack.length < 2) return;
+  undoStack.pop();                                   // drop current state
+  const prev = JSON.parse(undoStack[undoStack.length - 1]);
+  state = { nodes: prev.nodes, rootId: prev.rootId };
+  nextId = prev.nextId;
+  if (!state.nodes[selectedId]) selectedId = state.rootId;
+  render();
+  notifyChange();                                    // persist the undone state
 }
 
 function load() {
@@ -193,9 +216,9 @@ function render() {
     path.dataset.id = node.id;
     gBranches.appendChild(path);
 
-    if (node.image) drawImage(node, start, end);
     drawLabel(node, start, end, color, depth);
-    drawHandle(node, color);
+    if (node.image) drawImage(node);          // image IS the node, centred on its point
+    else drawHandle(node, color);             // otherwise a small grab handle
   }
 }
 
@@ -204,39 +227,42 @@ function drawRoot(node) {
   g.setAttribute("class", "node root" + (node.id === selectedId ? " selected" : ""));
   g.dataset.id = node.id;
 
-  const ell = document.createElementNS(SVG_NS, "ellipse");
   const text = document.createElementNS(SVG_NS, "text");
   text.setAttribute("class", "root-text");
   text.setAttribute("x", node.x);
   text.setAttribute("y", node.y);
   text.textContent = node.text || " ";
-  g.appendChild(ell);
-  if (node.image) {
-    // root image sits behind the text
-  }
   g.appendChild(text);
   gNodes.appendChild(g);
-
   const bb = text.getBBox();
-  rootSize = { rx: Math.max(64, bb.width / 2 + 30), ry: Math.max(40, bb.height / 2 + 22) };
-  ell.setAttribute("cx", node.x);
-  ell.setAttribute("cy", node.y);
-  ell.setAttribute("rx", rootSize.rx);
-  ell.setAttribute("ry", rootSize.ry);
 
   if (node.image) {
+    // Central image IS the node; title sits just below it and branches attach
+    // around the node point so they meet the image seamlessly.
+    const iw = 180, ih = 130;
+    rootSize = { rx: Math.max(iw / 2, bb.width / 2 + 10), ry: ih / 2 + bb.height + 6 };
     const img = document.createElementNS(SVG_NS, "image");
-    const iw = rootSize.rx * 1.6, ih = rootSize.ry * 1.6;
     img.setAttributeNS("http://www.w3.org/1999/xlink", "href", node.image);
     img.setAttribute("href", node.image);
     img.setAttribute("x", node.x - iw / 2);
-    img.setAttribute("y", node.y - ih / 2 - rootSize.ry - 8);
+    img.setAttribute("y", node.y - ih / 2 - bb.height / 2);
     img.setAttribute("width", iw);
     img.setAttribute("height", ih);
     img.setAttribute("preserveAspectRatio", "xMidYMid meet");
     img.dataset.id = node.id;
     g.insertBefore(img, text);
+    text.setAttribute("y", node.y + ih / 2 - bb.height / 2 + 6);   // title below image
+    labelWorld[node.id] = { x: node.x, y: parseFloat(text.getAttribute("y")) };
+    return;
   }
+
+  const ell = document.createElementNS(SVG_NS, "ellipse");
+  rootSize = { rx: Math.max(64, bb.width / 2 + 30), ry: Math.max(40, bb.height / 2 + 22) };
+  ell.setAttribute("cx", node.x);
+  ell.setAttribute("cy", node.y);
+  ell.setAttribute("rx", rootSize.rx);
+  ell.setAttribute("ry", rootSize.ry);
+  g.insertBefore(ell, text);
   labelWorld[node.id] = { x: node.x, y: node.y };
 }
 
@@ -267,21 +293,21 @@ function drawLabel(node, start, end, color, depth) {
   labelWorld[node.id] = { x: mid.x, y: mid.y };
 }
 
-function drawImage(node, start, end) {
-  const ang = Math.atan2(end.y - start.y, end.x - start.x);
-  const iw = 84, ih = 64;
-  const cx = end.x + Math.cos(ang) * 8;
-  const cy = end.y + Math.sin(ang) * 8 + ih / 2 + 14;
+// The picture becomes the node: centred on the node's point so the incoming
+// branch (which ends there) and any child branches (which start there) connect
+// seamlessly underneath it, rather than dangling as a separate icon.
+function drawImage(node) {
+  const iw = 120, ih = 90;
   const img = document.createElementNS(SVG_NS, "image");
   img.setAttribute("href", node.image);
   img.setAttributeNS("http://www.w3.org/1999/xlink", "href", node.image);
-  img.setAttribute("x", cx - iw / 2);
-  img.setAttribute("y", cy - ih / 2);
+  img.setAttribute("x", node.x - iw / 2);
+  img.setAttribute("y", node.y - ih / 2);
   img.setAttribute("width", iw);
   img.setAttribute("height", ih);
   img.setAttribute("preserveAspectRatio", "xMidYMid meet");
   img.dataset.id = node.id;
-  img.setAttribute("class", "node-image");
+  img.setAttribute("class", "node-image" + (node.id === selectedId ? " selected" : ""));
   gNodes.appendChild(img);
 }
 
@@ -305,7 +331,16 @@ function screenToWorld(sx, sy) {
 
 // ---- Node operations ------------------------------------------------------
 
-function select(id) { selectedId = id; render(); }
+// Lightweight selection: toggle classes in place. Rebuilding the whole DOM on
+// every click detaches the clicked element, which (a) breaks native dblclick
+// detection (the two clicks land on different nodes) and (b) made stray micro-
+// movements feel like jumps. So selection must NOT call render().
+function updateSelection() {
+  document.querySelectorAll("#nodes [data-id], #branches [data-id]").forEach((el) => {
+    el.classList.toggle("selected", el.dataset.id === selectedId);
+  });
+}
+function select(id) { selectedId = id; updateSelection(); }
 
 function addChild(parentId) {
   const parent = state.nodes[parentId];
@@ -317,14 +352,14 @@ function addChild(parentId) {
     const r = 220;
     const node = newNode("idea", parentId, parent.x + Math.cos(ang) * r, parent.y + Math.sin(ang) * r, null);
     state.nodes[node.id] = node;
-    select(node.id); save(); beginEdit(node.id); return;
+    selectedId = node.id; render(); save(); beginEdit(node.id); return;
   }
   dir = parent.x >= state.nodes[state.rootId].x ? 1 : -1;
   const x = parent.x + dir * 170;
   const y = parent.y + sibs.length * 70 - (sibs.length * 70) / 2;
   const node = newNode("idea", parentId, x, y, null);
   state.nodes[node.id] = node;
-  select(node.id); save(); beginEdit(node.id);
+  selectedId = node.id; render(); save(); beginEdit(node.id);
 }
 
 function addSibling(id) {
@@ -407,7 +442,7 @@ svg.addEventListener("mousedown", (e) => {
   if (t) {
     const id = t.dataset.id;
     select(id);
-    drag = { id, lastX: world.x, lastY: world.y, moved: false };
+    drag = { id, startSX: e.clientX, startSY: e.clientY, lastX: world.x, lastY: world.y, moved: false };
   } else {
     drag = { pan: true, startX: e.clientX, startY: e.clientY, camX: cam.x, camY: cam.y };
     svg.classList.add("panning");
@@ -421,10 +456,13 @@ window.addEventListener("mousemove", (e) => {
     cam.y = drag.camY + (e.clientY - drag.startY);
     applyCamera(); return;
   }
+  // Ignore sub-threshold jitter so a click never nudges/stretches a branch.
+  if (!drag.moved) {
+    if (Math.hypot(e.clientX - drag.startSX, e.clientY - drag.startSY) < 4) return;
+    drag.moved = true;   // cross threshold, then track the cursor from the grab point
+  }
   const world = screenToWorld(e.clientX, e.clientY);
-  const dx = world.x - drag.lastX, dy = world.y - drag.lastY;
-  if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) drag.moved = true;
-  moveSubtree(drag.id, dx, dy);
+  moveSubtree(drag.id, world.x - drag.lastX, world.y - drag.lastY);
   drag.lastX = world.x; drag.lastY = world.y;
   render();
 });
@@ -444,7 +482,7 @@ svg.addEventListener("dblclick", (e) => {
   const world = screenToWorld(e.clientX, e.clientY);
   const node = newNode("idea", parent.id, world.x, world.y, null);
   state.nodes[node.id] = node;
-  select(node.id); save(); beginEdit(node.id);
+  selectedId = node.id; render(); save(); beginEdit(node.id);
 });
 
 svg.addEventListener("wheel", (e) => {
@@ -462,6 +500,7 @@ svg.addEventListener("wheel", (e) => {
 
 window.addEventListener("keydown", (e) => {
   if (editingId != null) return;
+  if ((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z")) { e.preventDefault(); undo(); return; }
   if (e.key === "Tab") { e.preventDefault(); if (selectedId) addChild(selectedId); }
   else if (e.key === "Enter") { e.preventDefault(); if (selectedId) addSibling(selectedId); }
   else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); if (selectedId) removeSubtree(selectedId); }
@@ -507,6 +546,7 @@ $("btn-add-child").addEventListener("click", () => selectedId && addChild(select
 $("btn-add-sibling").addEventListener("click", () => selectedId && addSibling(selectedId));
 $("btn-delete").addEventListener("click", () => selectedId && removeSubtree(selectedId));
 $("btn-image").addEventListener("click", () => selectedId && $("image-input").click());
+$("btn-undo").addEventListener("click", undo);
 $("btn-fit").addEventListener("click", fit);
 $("btn-export").addEventListener("click", () => {
   const blob = new Blob([JSON.stringify({ nodes: state.nodes, rootId: state.rootId, nextId }, null, 2)],
@@ -528,7 +568,7 @@ $("file-input").addEventListener("change", (e) => {
       state = { nodes: doc.nodes, rootId: doc.rootId };
       nextId = doc.nextId || (Object.keys(doc.nodes).length + 1);
       selectedId = state.rootId;
-      render(); fit();
+      render(); fit(); resetHistory();
     } catch (err) { alert("Could not import: invalid mindmap file."); }
   };
   reader.readAsText(file); e.target.value = "";
@@ -557,20 +597,22 @@ function boot() {
   render();
   if (!had) { centerRoot(); }
   applyCamera();
+  resetHistory();
 }
 
 // External control surface for the shell (auth / server persistence).
 window.MindMap = {
   boot,
   fit,
-  newDoc() { freshDoc(); render(); centerRoot(); render(); },
+  undo,
+  newDoc() { freshDoc(); render(); centerRoot(); render(); resetHistory(); },
   getDoc() { return { nodes: state.nodes, rootId: state.rootId, nextId }; },
   loadDoc(doc) {
     if (!doc || !doc.nodes || !doc.rootId) { this.newDoc(); return; }
     state = { nodes: doc.nodes, rootId: doc.rootId };
     nextId = doc.nextId || (Object.keys(doc.nodes).length + 1);
     selectedId = state.rootId;
-    render(); fit();
+    render(); fit(); resetHistory();
   },
   onChange(cb) { changeListeners.push(cb); },
 };
