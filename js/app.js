@@ -220,6 +220,9 @@ function render() {
     if (node.image) drawImage(node);          // image IS the node, centred on its point
     drawHandle(node, color);                  // grab handle on top — the ONLY drag target
   }
+
+  const sel = state.nodes[selectedId];        // inline + buttons on the selected node
+  if (sel) drawAddButtons(sel);
 }
 
 function drawRoot(node) {
@@ -311,6 +314,46 @@ function drawImage(node) {
   gNodes.appendChild(img);
 }
 
+// Inline "+" affordances on the selected node: add a child branch (outward
+// from the tip) and, for non-root nodes, a following sibling branch.
+function drawAddButtons(node) {
+  const color = node.parentId ? resolvedColor(node) : "#b8860b";
+  let childP, sibP = null;
+  if (!node.parentId) {
+    childP = { x: node.x + rootSize.rx + 26, y: node.y };
+  } else {
+    const start = attachStart(state.nodes[node.parentId], node);
+    let ux = node.x - start.x, uy = node.y - start.y;
+    const len = Math.hypot(ux, uy) || 1; ux /= len; uy /= len;
+    childP = { x: node.x + ux * 30, y: node.y + uy * 30 };          // outward = new branch
+    sibP = { x: node.x - uy * 30, y: node.y + ux * 30 };            // perpendicular = sibling
+  }
+  addBtn(childP.x, childP.y, node.id, "child", color, true);
+  if (sibP) addBtn(sibP.x, sibP.y, node.id, "sibling", color, false);
+}
+
+function addBtn(x, y, id, action, color, filled) {
+  const g = document.createElementNS(SVG_NS, "g");
+  g.setAttribute("class", "add-btn add-" + action);
+  g.setAttribute("transform", `translate(${x} ${y})`);
+  g.dataset.id = id;
+  g.dataset.action = action;
+  const c = document.createElementNS(SVG_NS, "circle");
+  c.setAttribute("r", filled ? 11 : 9);
+  c.setAttribute("fill", filled ? color : "#fff");
+  c.setAttribute("stroke", filled ? "#fff" : color);
+  c.setAttribute("stroke-width", filled ? 2 : 2);
+  const t = document.createElementNS(SVG_NS, "text");
+  t.setAttribute("class", "add-plus");
+  t.setAttribute("x", 0);
+  t.setAttribute("y", 1);
+  t.setAttribute("font-size", filled ? 16 : 13);
+  t.setAttribute("fill", filled ? "#fff" : color);
+  t.textContent = "+";
+  g.appendChild(c); g.appendChild(t);
+  gNodes.appendChild(g);
+}
+
 function drawHandle(node, color) {
   // Larger transparent hit area + a visible dot, so it is easy to grab.
   const hit = document.createElementNS(SVG_NS, "circle");
@@ -349,6 +392,11 @@ function updateSelection() {
   document.querySelectorAll("#nodes [data-id], #branches [data-id]").forEach((el) => {
     el.classList.toggle("selected", el.dataset.id === selectedId);
   });
+  // Refresh the inline "+" buttons in place (do NOT rebuild nodes/labels, or
+  // native double-click would break again).
+  document.querySelectorAll(".add-btn").forEach((el) => el.remove());
+  const sel = state.nodes[selectedId];
+  if (sel) drawAddButtons(sel);
 }
 function select(id) { selectedId = id; updateSelection(); }
 
@@ -447,6 +495,13 @@ editor.addEventListener("blur", commitEdit);
 let drag = null;
 
 svg.addEventListener("mousedown", (e) => {
+  const addEl = e.target.closest(".add-btn");          // inline + : add child / sibling
+  if (addEl) {
+    e.preventDefault();
+    if (addEl.dataset.action === "sibling") addSibling(addEl.dataset.id);
+    else addChild(addEl.dataset.id);
+    return;
+  }
   const handle = e.target.closest(".handle");          // ONLY handles start a drag
   const idEl = e.target.closest("[data-id]");
   const world = screenToWorld(e.clientX, e.clientY);
@@ -555,9 +610,10 @@ function buildSwatches() {
   });
 }
 
-$("btn-add-child").addEventListener("click", () => selectedId && addChild(selectedId));
-$("btn-add-sibling").addEventListener("click", () => selectedId && addSibling(selectedId));
-$("btn-delete").addEventListener("click", () => selectedId && removeSubtree(selectedId));
+function activeId() { return (selectedId && state.nodes[selectedId]) ? selectedId : state.rootId; }
+$("btn-add-child").addEventListener("click", () => addChild(activeId()));
+$("btn-add-sibling").addEventListener("click", () => addSibling(activeId()));
+$("btn-delete").addEventListener("click", () => removeSubtree(activeId()));
 $("btn-image").addEventListener("click", () => selectedId && $("image-input").click());
 $("btn-undo").addEventListener("click", undo);
 $("btn-fit").addEventListener("click", fit);
