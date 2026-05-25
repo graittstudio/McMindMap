@@ -494,7 +494,20 @@ editor.addEventListener("blur", commitEdit);
 
 let drag = null;
 
-svg.addEventListener("mousedown", (e) => {
+// Pointer Events + pointer capture: this guarantees we receive pointerup even
+// when the pointer is released outside the window, so a drag can never get
+// "stuck" and make a branch follow the cursor and shoot off screen.
+function endDrag(e) {
+  if (drag) {
+    if (!drag.pan && drag.moved) save();
+    svg.classList.remove("panning");
+  }
+  drag = null;
+  if (e) { try { svg.releasePointerCapture(e.pointerId); } catch (_) {} }
+}
+
+svg.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 && e.pointerType === "mouse") return;   // left button / touch / pen only
   const addEl = e.target.closest(".add-btn");          // inline + : add child / sibling
   if (addEl) {
     e.preventDefault();
@@ -506,25 +519,21 @@ svg.addEventListener("mousedown", (e) => {
   const idEl = e.target.closest("[data-id]");
   const world = screenToWorld(e.clientX, e.clientY);
   if (handle) {
-    const id = handle.dataset.id;
-    select(id);
-    drag = { id, startSX: e.clientX, startSY: e.clientY, lastX: world.x, lastY: world.y, moved: false };
+    select(handle.dataset.id);
+    drag = { id: handle.dataset.id, startSX: e.clientX, startSY: e.clientY, lastX: world.x, lastY: world.y, moved: false };
+    try { svg.setPointerCapture(e.pointerId); } catch (_) {}
   } else if (idEl) {
     select(idEl.dataset.id);                            // click text/branch/image = select only
   } else {
     drag = { pan: true, startX: e.clientX, startY: e.clientY, camX: cam.x, camY: cam.y };
     svg.classList.add("panning");
+    try { svg.setPointerCapture(e.pointerId); } catch (_) {}
   }
 });
 
-window.addEventListener("mousemove", (e) => {
+svg.addEventListener("pointermove", (e) => {
   if (!drag) return;
-  // If no mouse button is held, a mouseup was missed (e.g. released off-window).
-  // Stop here so the node never "follows" the cursor and shoots off later.
-  if (e.buttons === 0) {
-    if (!drag.pan && drag.moved) save();
-    drag = null; svg.classList.remove("panning"); return;
-  }
+  if (e.buttons === 0) { endDrag(e); return; }          // button no longer held
   if (drag.pan) {
     cam.x = drag.camX + (e.clientX - drag.startX);
     cam.y = drag.camY + (e.clientY - drag.startY);
@@ -536,18 +545,15 @@ window.addEventListener("mousemove", (e) => {
     drag.moved = true;   // cross threshold, then track the cursor from the grab point
   }
   const world = screenToWorld(e.clientX, e.clientY);
-  moveSubtree(drag.id, world.x - drag.lastX, world.y - drag.lastY);
+  const dx = world.x - drag.lastX, dy = world.y - drag.lastY;
+  if (Math.abs(dx) > 4000 || Math.abs(dy) > 4000) return; // reject an implausible jump
+  moveSubtree(drag.id, dx, dy);
   drag.lastX = world.x; drag.lastY = world.y;
   render();
 });
 
-window.addEventListener("mouseup", () => {
-  if (drag) {
-    if (!drag.pan && drag.moved) save();
-    svg.classList.remove("panning");
-  }
-  drag = null;
-});
+svg.addEventListener("pointerup", endDrag);
+svg.addEventListener("pointercancel", endDrag);
 
 svg.addEventListener("dblclick", (e) => {
   const t = e.target.closest("[data-id]");
