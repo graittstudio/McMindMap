@@ -1,10 +1,10 @@
 "use strict";
 
 const PALETTE = [
-  "#e8453c", "#f4a900", "#3aa655", "#1d9bf0",
-  "#8a4fc7", "#e0529c", "#16b3a7", "#f06a2e",
+  "#d83b32", "#e08a16", "#2f9e44", "#1c7ed6",
+  "#7048e8", "#c2255c", "#0c8599", "#e8590c",
 ];
-const STORAGE_KEY = "mindmap.doc.v1";
+const STORAGE_KEY = "mcmindmap.doc.v1";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const $ = (id) => document.getElementById(id);
@@ -22,13 +22,16 @@ let selectedId = null;
 let cam = { x: 0, y: 0, scale: 1 };
 let nextId = 1;
 
+let rootSize = { rx: 70, ry: 48 };
+const labelWorld = {};     // id -> {x,y} anchor used by the inline editor
+
 function newNode(text, parentId, x, y, color) {
-  return { id: "n" + nextId++, text, parentId, x, y, color: color || null };
+  return { id: "n" + nextId++, text, parentId, x, y, color: color || null, image: null };
 }
 
 function freshDoc() {
   nextId = 1;
-  const root = newNode("Central idea", null, 0, 0, null);
+  const root = newNode("Central topic", null, 0, 0, null);
   state = { nodes: { [root.id]: root }, rootId: root.id };
   selectedId = root.id;
 }
@@ -43,13 +46,13 @@ function depthOf(node) {
   return d;
 }
 
-// Resolve the colour of a node: top-level branch colour, inherited downward.
+// Top-level branch colour, inherited by the whole sub-tree.
 function resolvedColor(node) {
   let n = node;
   while (n.parentId && state.nodes[n.parentId].parentId) {
     n = state.nodes[n.parentId];
   }
-  if (!n.parentId) return "#888";          // root itself
+  if (!n.parentId) return "#666";          // root itself
   if (!n.color) {
     const idx = children(state.rootId).indexOf(n);
     n.color = PALETTE[(idx >= 0 ? idx : 0) % PALETTE.length];
@@ -82,6 +85,22 @@ function load() {
   } catch (e) { return false; }
 }
 
+// ---- Colour helpers -------------------------------------------------------
+
+function parseHex(hex) {
+  const c = hex.replace("#", "");
+  return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
+}
+function darken(hex, f) {
+  const [r, g, b] = parseHex(hex);
+  return `rgb(${Math.round(r * (1 - f))}, ${Math.round(g * (1 - f))}, ${Math.round(b * (1 - f))})`;
+}
+function tint(hex, f) {
+  const [r, g, b] = parseHex(hex);
+  const mix = (v) => Math.round(v + (255 - v) * f);
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+}
+
 // ---- Geometry: organic tapering branch ------------------------------------
 
 function bezier(p0, c1, c2, p1, t) {
@@ -101,11 +120,18 @@ function bezierTangent(p0, c1, c2, p1, t) {
   };
 }
 
-function branchPath(p0, p1, w0, w1) {
+// Control points give branches a gentle S-curve like a hand-drawn map.
+function controls(p0, p1) {
   const dx = p1.x - p0.x;
-  const c1 = { x: p0.x + dx * 0.5, y: p0.y };
-  const c2 = { x: p1.x - dx * 0.5, y: p1.y };
-  const N = 26;
+  return [
+    { x: p0.x + dx * 0.45, y: p0.y },
+    { x: p1.x - dx * 0.45, y: p1.y },
+  ];
+}
+
+function branchPath(p0, p1, w0, w1) {
+  const [c1, c2] = controls(p0, p1);
+  const N = 28;
   const left = [], right = [];
   for (let i = 0; i <= N; i++) {
     const t = i / N;
@@ -113,7 +139,7 @@ function branchPath(p0, p1, w0, w1) {
     const tan = bezierTangent(p0, c1, c2, p1, t);
     const len = Math.hypot(tan.x, tan.y) || 1;
     const nx = -tan.y / len, ny = tan.x / len;
-    const w = (w0 + (w1 - w0) * Math.pow(t, 1.3)) / 2;
+    const w = (w0 + (w1 - w0) * Math.pow(t, 1.25)) / 2;
     left.push({ x: pt.x + nx * w, y: pt.y + ny * w });
     right.push({ x: pt.x - nx * w, y: pt.y - ny * w });
   }
@@ -123,17 +149,20 @@ function branchPath(p0, p1, w0, w1) {
   return d + " Z";
 }
 
-function widthForDepth(d) {
-  return Math.max(5, 19 - d * 4);
+function widthForDepth(d) { return Math.max(4, 20 - d * 5); }
+function fontForDepth(d) { return Math.max(12, 18 - (d - 1) * 2); }
+
+// Where a child branch starts on its parent.
+function attachStart(parent, child) {
+  if (parent.parentId) return { x: parent.x, y: parent.y };  // chain tip-to-tip
+  const ang = Math.atan2(child.y - parent.y, child.x - parent.x);
+  return { x: parent.x + Math.cos(ang) * rootSize.rx, y: parent.y + Math.sin(ang) * rootSize.ry };
 }
 
 // ---- Rendering ------------------------------------------------------------
 
-const sizeCache = {};   // id -> {w,h} measured
-
 function applyCamera() {
-  gViewport.setAttribute("transform",
-    `translate(${cam.x} ${cam.y}) scale(${cam.scale})`);
+  gViewport.setAttribute("transform", `translate(${cam.x} ${cam.y}) scale(${cam.scale})`);
 }
 
 function render() {
@@ -141,88 +170,138 @@ function render() {
   gNodes.textContent = "";
   gBranches.textContent = "";
 
-  // First pass: draw node boxes (and measure), so we know sizes.
-  for (const node of Object.values(state.nodes)) {
-    drawNode(node);
-  }
-  // Second pass: branches behind nodes.
+  drawRoot(state.nodes[state.rootId]);
+
   for (const node of Object.values(state.nodes)) {
     if (!node.parentId) continue;
     const parent = state.nodes[node.parentId];
-    const p0 = { x: parent.x, y: parent.y };
-    const p1 = { x: node.x, y: node.y };
-    const dp = depthOf(parent);
-    const w0 = widthForDepth(dp + 1);
-    const w1 = Math.max(2.5, w0 * 0.4);
+    const start = attachStart(parent, node);
+    const end = { x: node.x, y: node.y };
+    const depth = depthOf(node);
+    const color = resolvedColor(node);
+    const w0 = widthForDepth(depth);
+    const w1 = Math.max(2.5, widthForDepth(depth + 1) * 0.7);
+
     const path = document.createElementNS(SVG_NS, "path");
-    path.setAttribute("class", "branch");
-    path.setAttribute("d", branchPath(p0, p1, w0, w1));
-    path.setAttribute("fill", resolvedColor(node));
+    path.setAttribute("class", "branch" + (node.id === selectedId ? " selected" : ""));
+    path.setAttribute("d", branchPath(start, end, w0, w1));
+    path.setAttribute("fill", color);
+    path.dataset.id = node.id;
     gBranches.appendChild(path);
+
+    if (node.image) drawImage(node, start, end);
+    drawLabel(node, start, end, color, depth);
+    drawHandle(node, color);
   }
 }
 
-function drawNode(node) {
-  const isRoot = !node.parentId;
+function drawRoot(node) {
   const g = document.createElementNS(SVG_NS, "g");
-  g.setAttribute("class", "node" + (isRoot ? " root" : "") +
-    (node.id === selectedId ? " selected" : ""));
+  g.setAttribute("class", "node root" + (node.id === selectedId ? " selected" : ""));
   g.dataset.id = node.id;
 
-  const rect = document.createElementNS(SVG_NS, "rect");
-  rect.setAttribute("class", "node-rect");
+  const ell = document.createElementNS(SVG_NS, "ellipse");
   const text = document.createElementNS(SVG_NS, "text");
-  text.setAttribute("class", "node-text");
+  text.setAttribute("class", "root-text");
+  text.setAttribute("x", node.x);
+  text.setAttribute("y", node.y);
   text.textContent = node.text || " ";
-
-  g.appendChild(rect);
+  g.appendChild(ell);
+  if (node.image) {
+    // root image sits behind the text
+  }
   g.appendChild(text);
   gNodes.appendChild(g);
 
-  // measure text now that it is in the DOM
   const bb = text.getBBox();
-  const padX = isRoot ? 22 : 14;
-  const padY = isRoot ? 14 : 9;
-  const w = Math.max(isRoot ? 90 : 40, bb.width + padX * 2);
-  const h = bb.height + padY * 2;
-  sizeCache[node.id] = { w, h };
+  rootSize = { rx: Math.max(64, bb.width / 2 + 30), ry: Math.max(40, bb.height / 2 + 22) };
+  ell.setAttribute("cx", node.x);
+  ell.setAttribute("cy", node.y);
+  ell.setAttribute("rx", rootSize.rx);
+  ell.setAttribute("ry", rootSize.ry);
 
-  rect.setAttribute("x", node.x - w / 2);
-  rect.setAttribute("y", node.y - h / 2);
-  rect.setAttribute("width", w);
-  rect.setAttribute("height", h);
-  rect.setAttribute("rx", isRoot ? 22 : 16);
-  rect.setAttribute("ry", isRoot ? 22 : 16);
-  rect.setAttribute("fill", isRoot ? "var(--root-fill)" : tint(resolvedColor(node)));
-
-  text.setAttribute("x", node.x);
-  text.setAttribute("y", node.y);
+  if (node.image) {
+    const img = document.createElementNS(SVG_NS, "image");
+    const iw = rootSize.rx * 1.6, ih = rootSize.ry * 1.6;
+    img.setAttributeNS("http://www.w3.org/1999/xlink", "href", node.image);
+    img.setAttribute("href", node.image);
+    img.setAttribute("x", node.x - iw / 2);
+    img.setAttribute("y", node.y - ih / 2 - rootSize.ry - 8);
+    img.setAttribute("width", iw);
+    img.setAttribute("height", ih);
+    img.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    img.dataset.id = node.id;
+    g.insertBefore(img, text);
+  }
+  labelWorld[node.id] = { x: node.x, y: node.y };
 }
 
-// Lighten a branch colour for the node fill.
-function tint(hex) {
-  const c = hex.replace("#", "");
-  const r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16);
-  const mix = (v) => Math.round(v + (255 - v) * 0.82);
-  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+function drawLabel(node, start, end, color, depth) {
+  const [c1, c2] = controls(start, end);
+  const mid = bezier(start, c1, c2, end, 0.5);
+  const tan = bezierTangent(start, c1, c2, end, 0.5);
+  let ang = Math.atan2(tan.y, tan.x) * 180 / Math.PI;
+  if (ang > 90 || ang < -90) ang += 180;            // keep text upright
+  const fs = fontForDepth(depth);
+  const half = (widthForDepth(depth) + widthForDepth(depth + 1)) / 4;
+
+  const g = document.createElementNS(SVG_NS, "g");
+  g.setAttribute("class", "label" + (node.id === selectedId ? " selected" : ""));
+  g.setAttribute("transform", `translate(${mid.x} ${mid.y}) rotate(${ang})`);
+  g.dataset.id = node.id;
+
+  const text = document.createElementNS(SVG_NS, "text");
+  text.setAttribute("class", "branch-text");
+  text.setAttribute("x", 0);
+  text.setAttribute("y", -(half + 5));
+  text.setAttribute("font-size", fs);
+  text.setAttribute("fill", darken(color, 0.45));
+  text.textContent = node.text || " ";
+  g.appendChild(text);
+  gNodes.appendChild(g);
+
+  labelWorld[node.id] = { x: mid.x, y: mid.y };
+}
+
+function drawImage(node, start, end) {
+  const ang = Math.atan2(end.y - start.y, end.x - start.x);
+  const iw = 84, ih = 64;
+  const cx = end.x + Math.cos(ang) * 8;
+  const cy = end.y + Math.sin(ang) * 8 + ih / 2 + 14;
+  const img = document.createElementNS(SVG_NS, "image");
+  img.setAttribute("href", node.image);
+  img.setAttributeNS("http://www.w3.org/1999/xlink", "href", node.image);
+  img.setAttribute("x", cx - iw / 2);
+  img.setAttribute("y", cy - ih / 2);
+  img.setAttribute("width", iw);
+  img.setAttribute("height", ih);
+  img.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  img.dataset.id = node.id;
+  img.setAttribute("class", "node-image");
+  gNodes.appendChild(img);
+}
+
+function drawHandle(node, color) {
+  const h = document.createElementNS(SVG_NS, "circle");
+  h.setAttribute("class", "handle" + (node.id === selectedId ? " selected" : ""));
+  h.setAttribute("cx", node.x);
+  h.setAttribute("cy", node.y);
+  h.setAttribute("r", node.id === selectedId ? 6 : 4);
+  h.setAttribute("fill", color);
+  h.dataset.id = node.id;
+  gNodes.appendChild(h);
 }
 
 // ---- Coordinate helpers ---------------------------------------------------
 
 function screenToWorld(sx, sy) {
   const rect = svg.getBoundingClientRect();
-  return {
-    x: (sx - rect.left - cam.x) / cam.scale,
-    y: (sy - rect.top - cam.y) / cam.scale,
-  };
+  return { x: (sx - rect.left - cam.x) / cam.scale, y: (sy - rect.top - cam.y) / cam.scale };
 }
 
 // ---- Node operations ------------------------------------------------------
 
-function select(id) {
-  selectedId = id;
-  render();
-}
+function select(id) { selectedId = id; render(); }
 
 function addChild(parentId) {
   const parent = state.nodes[parentId];
@@ -230,19 +309,18 @@ function addChild(parentId) {
   const sibs = children(parentId);
   let dir;
   if (!parent.parentId) {
-    dir = sibs.length % 2 === 0 ? 1 : -1;     // alternate sides off the root
-  } else {
-    dir = parent.x >= state.nodes[state.rootId].x ? 1 : -1;
+    const ang = (sibs.length * 49) % 360 * Math.PI / 180;   // fan around the centre
+    const r = 220;
+    const node = newNode("idea", parentId, parent.x + Math.cos(ang) * r, parent.y + Math.sin(ang) * r, null);
+    state.nodes[node.id] = node;
+    select(node.id); save(); beginEdit(node.id); return;
   }
-  const pw = (sizeCache[parentId] || { w: 80 }).w;
-  const x = parent.x + dir * (pw / 2 + 150);
-  const spread = 78;
-  const y = parent.y + sibs.length * spread - (sibs.length * spread) / 2;
-  const node = newNode("New idea", parentId, x, y, null);
+  dir = parent.x >= state.nodes[state.rootId].x ? 1 : -1;
+  const x = parent.x + dir * 170;
+  const y = parent.y + sibs.length * 70 - (sibs.length * 70) / 2;
+  const node = newNode("idea", parentId, x, y, null);
   state.nodes[node.id] = node;
-  select(node.id);
-  save();
-  beginEdit(node.id);
+  select(node.id); save(); beginEdit(node.id);
 }
 
 function addSibling(id) {
@@ -259,27 +337,28 @@ function removeSubtree(id) {
   const parentId = state.nodes[id].parentId;
   toDelete.forEach((nid) => delete state.nodes[nid]);
   selectedId = parentId || state.rootId;
-  save();
-  render();
+  save(); render();
 }
 
 function moveSubtree(id, dx, dy) {
   const move = (nid) => {
-    state.nodes[nid].x += dx;
-    state.nodes[nid].y += dy;
+    state.nodes[nid].x += dx; state.nodes[nid].y += dy;
     children(nid).forEach(move);
   };
   move(id);
 }
 
 function setColor(id, color) {
-  // colour applies to the top-level branch containing this node
   let n = state.nodes[id];
   if (!n || !n.parentId) return;
   while (state.nodes[n.parentId].parentId) n = state.nodes[n.parentId];
-  n.color = color;
-  save();
-  render();
+  n.color = color; save(); render();
+}
+
+function attachImage(id, dataUrl) {
+  const n = state.nodes[id];
+  if (!n) return;
+  n.image = dataUrl; save(); render();
 }
 
 // ---- Inline editor --------------------------------------------------------
@@ -290,26 +369,21 @@ function beginEdit(id) {
   const node = state.nodes[id];
   if (!node) return;
   editingId = id;
-  const sx = node.x * cam.scale + cam.x + svg.getBoundingClientRect().left;
-  const sy = node.y * cam.scale + cam.y + svg.getBoundingClientRect().top;
+  const anchor = labelWorld[id] || { x: node.x, y: node.y };
+  const r = svg.getBoundingClientRect();
   editor.value = node.text;
   editor.hidden = false;
-  editor.style.left = sx + "px";
-  editor.style.top = sy + "px";
+  editor.style.left = (anchor.x * cam.scale + cam.x + r.left) + "px";
+  editor.style.top = (anchor.y * cam.scale + cam.y + r.top) + "px";
   editor.style.transform = "translate(-50%, -50%)";
-  editor.style.minWidth = "80px";
-  editor.focus();
-  editor.select();
+  editor.focus(); editor.select();
 }
 
 function commitEdit() {
   if (editingId == null) return;
   const node = state.nodes[editingId];
-  if (node) node.text = editor.value.trim() || "Untitled";
-  editingId = null;
-  editor.hidden = true;
-  save();
-  render();
+  if (node) node.text = editor.value.trim() || "idea";
+  editingId = null; editor.hidden = true; save(); render();
 }
 
 editor.addEventListener("keydown", (e) => {
@@ -321,13 +395,13 @@ editor.addEventListener("blur", commitEdit);
 
 // ---- Pointer interaction --------------------------------------------------
 
-let drag = null;   // {id, startWorld, moved} or {pan, startX, startY, camX, camY}
+let drag = null;
 
 svg.addEventListener("mousedown", (e) => {
-  const g = e.target.closest(".node");
+  const t = e.target.closest("[data-id]");
   const world = screenToWorld(e.clientX, e.clientY);
-  if (g) {
-    const id = g.dataset.id;
+  if (t) {
+    const id = t.dataset.id;
     select(id);
     drag = { id, lastX: world.x, lastY: world.y, moved: false };
   } else {
@@ -341,8 +415,7 @@ window.addEventListener("mousemove", (e) => {
   if (drag.pan) {
     cam.x = drag.camX + (e.clientX - drag.startX);
     cam.y = drag.camY + (e.clientY - drag.startY);
-    applyCamera();
-    return;
+    applyCamera(); return;
   }
   const world = screenToWorld(e.clientX, e.clientY);
   const dx = world.x - drag.lastX, dy = world.y - drag.lastY;
@@ -354,27 +427,20 @@ window.addEventListener("mousemove", (e) => {
 
 window.addEventListener("mouseup", () => {
   if (drag) {
-    if (drag.pan) { cam.x = cam.x; save(); }
-    else if (drag.moved) save();
+    if (!drag.pan && drag.moved) save();
     svg.classList.remove("panning");
   }
   drag = null;
 });
 
 svg.addEventListener("dblclick", (e) => {
-  const g = e.target.closest(".node");
-  if (g) {
-    beginEdit(g.dataset.id);
-  } else {
-    // add a child to the currently selected node at the cursor
-    const parent = state.nodes[selectedId] || state.nodes[state.rootId];
-    const world = screenToWorld(e.clientX, e.clientY);
-    const node = newNode("New idea", parent.id, world.x, world.y, null);
-    state.nodes[node.id] = node;
-    select(node.id);
-    save();
-    beginEdit(node.id);
-  }
+  const t = e.target.closest("[data-id]");
+  if (t) { beginEdit(t.dataset.id); return; }
+  const parent = state.nodes[selectedId] || state.nodes[state.rootId];
+  const world = screenToWorld(e.clientX, e.clientY);
+  const node = newNode("idea", parent.id, world.x, world.y, null);
+  state.nodes[node.id] = node;
+  select(node.id); save(); beginEdit(node.id);
 });
 
 svg.addEventListener("wheel", (e) => {
@@ -384,10 +450,8 @@ svg.addEventListener("wheel", (e) => {
   const mx = e.clientX - rect.left, my = e.clientY - rect.top;
   const wx = (mx - cam.x) / cam.scale, wy = (my - cam.y) / cam.scale;
   cam.scale = Math.min(3, Math.max(0.2, cam.scale * factor));
-  cam.x = mx - wx * cam.scale;
-  cam.y = my - wy * cam.scale;
-  applyCamera();
-  save();
+  cam.x = mx - wx * cam.scale; cam.y = my - wy * cam.scale;
+  applyCamera(); save();
 }, { passive: false });
 
 // ---- Keyboard -------------------------------------------------------------
@@ -396,31 +460,28 @@ window.addEventListener("keydown", (e) => {
   if (editingId != null) return;
   if (e.key === "Tab") { e.preventDefault(); if (selectedId) addChild(selectedId); }
   else if (e.key === "Enter") { e.preventDefault(); if (selectedId) addSibling(selectedId); }
-  else if (e.key === "Delete" || e.key === "Backspace") {
-    e.preventDefault(); if (selectedId) removeSubtree(selectedId);
-  } else if (e.key === "F2") { if (selectedId) beginEdit(selectedId); }
+  else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); if (selectedId) removeSubtree(selectedId); }
+  else if (e.key === "F2") { if (selectedId) beginEdit(selectedId); }
 });
 
 // ---- Fit to screen --------------------------------------------------------
 
 function fit() {
-  const ids = Object.keys(state.nodes);
-  if (!ids.length) return;
+  if (!Object.keys(state.nodes).length) return;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const n of Object.values(state.nodes)) {
-    const s = sizeCache[n.id] || { w: 80, h: 40 };
-    minX = Math.min(minX, n.x - s.w / 2); maxX = Math.max(maxX, n.x + s.w / 2);
-    minY = Math.min(minY, n.y - s.h / 2); maxY = Math.max(maxY, n.y + s.h / 2);
+    const m = !n.parentId ? Math.max(rootSize.rx, rootSize.ry) + 20 : 70;
+    minX = Math.min(minX, n.x - m); maxX = Math.max(maxX, n.x + m);
+    minY = Math.min(minY, n.y - m); maxY = Math.max(maxY, n.y + m);
   }
   const rect = svg.getBoundingClientRect();
-  const pad = 60;
+  const pad = 50;
   const sx = rect.width / (maxX - minX + pad * 2);
   const sy = rect.height / (maxY - minY + pad * 2);
-  cam.scale = Math.min(3, Math.max(0.2, Math.min(sx, sy)));
+  cam.scale = Math.min(2, Math.max(0.2, Math.min(sx, sy)));
   cam.x = rect.width / 2 - ((minX + maxX) / 2) * cam.scale;
   cam.y = rect.height / 2 - ((minY + maxY) / 2) * cam.scale;
-  applyCamera();
-  save();
+  applyCamera(); save();
 }
 
 // ---- Toolbar --------------------------------------------------------------
@@ -441,19 +502,19 @@ function buildSwatches() {
 $("btn-add-child").addEventListener("click", () => selectedId && addChild(selectedId));
 $("btn-add-sibling").addEventListener("click", () => selectedId && addSibling(selectedId));
 $("btn-delete").addEventListener("click", () => selectedId && removeSubtree(selectedId));
+$("btn-image").addEventListener("click", () => selectedId && $("image-input").click());
 $("btn-fit").addEventListener("click", fit);
 $("btn-new").addEventListener("click", () => {
   if (!confirm("Discard the current mindmap and start a new one?")) return;
-  freshDoc(); centerRoot(); render(); save();
+  freshDoc(); render(); centerRoot(); render(); save();
 });
 $("btn-export").addEventListener("click", () => {
   const blob = new Blob([JSON.stringify({ nodes: state.nodes, rootId: state.rootId, nextId }, null, 2)],
     { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "mindmap.json";
-  a.click();
-  URL.revokeObjectURL(a.href);
+  a.download = "mcmindmap.json";
+  a.click(); URL.revokeObjectURL(a.href);
 });
 $("btn-import").addEventListener("click", () => $("file-input").click());
 $("file-input").addEventListener("change", (e) => {
@@ -467,11 +528,17 @@ $("file-input").addEventListener("change", (e) => {
       state = { nodes: doc.nodes, rootId: doc.rootId };
       nextId = doc.nextId || (Object.keys(doc.nodes).length + 1);
       selectedId = state.rootId;
-      fit(); render(); save();
+      render(); fit();
     } catch (err) { alert("Could not import: invalid mindmap file."); }
   };
-  reader.readAsText(file);
-  e.target.value = "";
+  reader.readAsText(file); e.target.value = "";
+});
+$("image-input").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file || !selectedId) return;
+  const reader = new FileReader();
+  reader.onload = () => attachImage(selectedId, reader.result);
+  reader.readAsDataURL(file); e.target.value = "";
 });
 
 // ---- Boot -----------------------------------------------------------------
@@ -480,14 +547,15 @@ function centerRoot() {
   const rect = svg.getBoundingClientRect();
   const root = state.nodes[state.rootId];
   cam.scale = 1;
-  cam.x = rect.width / 2 - root.x * cam.scale;
-  cam.y = rect.height / 2 - root.y * cam.scale;
+  cam.x = rect.width / 2 - root.x; cam.y = rect.height / 2 - root.y;
 }
 
 function boot() {
   buildSwatches();
-  if (!load()) { freshDoc(); render(); centerRoot(); }
+  const had = load();
+  if (!had) freshDoc();
   render();
+  if (!had) { centerRoot(); }
   applyCamera();
 }
 

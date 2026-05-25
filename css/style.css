@@ -81,30 +81,45 @@ html, body {
 }
 #canvas.panning { cursor: grabbing; }
 
-.node {
-  cursor: pointer;
-}
-.node-rect {
-  rx: 16;
-  ry: 16;
-  stroke: rgba(0,0,0,.12);
-  stroke-width: 1;
-}
-.node.root .node-rect { stroke: none; }
-.node.selected .node-rect {
-  stroke: var(--selected);
+.node { cursor: pointer; }
+
+/* Central topic: free organic shape */
+.root ellipse {
+  fill: #fff7e6;
+  stroke: #caa14a;
   stroke-width: 2.5;
 }
-.node-text {
-  font-size: 15px;
-  fill: #2b2b2b;
+.root.selected ellipse { stroke: var(--selected); stroke-width: 3.5; }
+.root-text {
+  font-size: 20px;
+  font-weight: 700;
+  fill: #b8860b;
   dominant-baseline: middle;
   text-anchor: middle;
   pointer-events: none;
 }
-.node.root .node-text { fill: #fff; font-weight: 700; font-size: 17px; }
 
+/* Tapering branch (filled path) */
 .branch { stroke: none; }
+.branch.selected { stroke: rgba(0,0,0,.35); stroke-width: 1.5; }
+
+/* Word written above its branch */
+.branch-text {
+  font-weight: 600;
+  dominant-baseline: alphabetic;
+  text-anchor: middle;
+  pointer-events: visiblePainted;
+  cursor: pointer;
+  paint-order: stroke;
+  stroke: rgba(255,255,255,.85);
+  stroke-width: 3px;
+}
+.label.selected .branch-text { text-decoration: underline; }
+
+.handle { stroke: #fff; stroke-width: 1.5; cursor: grab; opacity: .85; }
+.handle.selected { stroke: var(--selected); stroke-width: 2; opacity: 1; }
+
+.node-image { cursor: pointer; }
 
 #editor {
   position: fixed;
