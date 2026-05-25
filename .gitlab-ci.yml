@@ -1,0 +1,50 @@
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+
+stages:
+  - lint
+  - deploy
+
+# ── Lint ────────────────────────────────────────────────────────────────────
+# Static app: JS syntax check + sanity that the entry files exist.
+
+lint:
+  stage: lint
+  script:
+    - test -f index.html || (echo "index.html missing" && exit 1)
+    - test -f js/app.js  || (echo "js/app.js missing"  && exit 1)
+    - export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && nvm use 20 || true
+    - node --check js/app.js
+    - echo "OK"
+
+# ── Deploy ──────────────────────────────────────────────────────────────────
+# SSH to sebas and git pull in the docroot. Only on main.
+#
+# Required CI/CD variables (masked=false):
+#   MINDMAP_HOST     : sebas.aukes.com
+#   MINDMAP_PATH     : /var/www/mindmap
+#   SSH_PRIVATE_KEY  : deploy key authorised for root@sebas
+
+deploy:
+  stage: deploy
+  needs: []
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  script:
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/mindmap_deploy
+    - chmod 600 ~/.ssh/mindmap_deploy
+    - ssh-keygen -y -f ~/.ssh/mindmap_deploy > /dev/null
+    - eval "$(ssh-agent -s)"
+    - ssh-add ~/.ssh/mindmap_deploy
+    - echo "Deploying to root@$MINDMAP_HOST:$MINDMAP_PATH ..."
+    - >
+      ssh -o StrictHostKeyChecking=no -i ~/.ssh/mindmap_deploy root@$MINDMAP_HOST
+      "cd $MINDMAP_PATH && git pull && echo '✓ git pull done'"
+    - echo "✓ Deployment complete"
+  environment:
+    name: production
+    url: https://mindmap.apps.aukes.com

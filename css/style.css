@@ -1,0 +1,121 @@
+:root {
+  --bg: #f4f1ea;
+  --toolbar-bg: #ffffff;
+  --toolbar-fg: #333;
+  --root-fill: #3a3a3a;
+  --selected: #1d6fe0;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#toolbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 14px;
+  background: var(--toolbar-bg);
+  border-bottom: 1px solid #e0ddd5;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  z-index: 10;
+}
+
+#toolbar .brand {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--toolbar-fg);
+  letter-spacing: .3px;
+}
+
+#toolbar .group { display: flex; align-items: center; gap: 6px; }
+
+#toolbar button {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 11px;
+  border: 1px solid #d4d0c7;
+  border-radius: 7px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+}
+#toolbar button:hover { background: #f0ede6; }
+#toolbar button:active { transform: translateY(1px); }
+
+#toolbar .hint {
+  margin-left: auto;
+  font-size: 12px;
+  color: #999;
+}
+
+.swatches { display: flex; gap: 5px; }
+.swatch {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #ccc;
+  cursor: pointer;
+}
+.swatch.active { box-shadow: 0 0 0 2px #333; }
+
+#canvas {
+  position: fixed;
+  top: 48px; left: 0;
+  width: 100%;
+  height: calc(100% - 48px);
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+#canvas.panning { cursor: grabbing; }
+
+.node {
+  cursor: pointer;
+}
+.node-rect {
+  rx: 16;
+  ry: 16;
+  stroke: rgba(0,0,0,.12);
+  stroke-width: 1;
+}
+.node.root .node-rect { stroke: none; }
+.node.selected .node-rect {
+  stroke: var(--selected);
+  stroke-width: 2.5;
+}
+.node-text {
+  font-size: 15px;
+  fill: #2b2b2b;
+  dominant-baseline: middle;
+  text-anchor: middle;
+  pointer-events: none;
+}
+.node.root .node-text { fill: #fff; font-weight: 700; font-size: 17px; }
+
+.branch { stroke: none; }
+
+#editor {
+  position: fixed;
+  z-index: 20;
+  font-family: inherit;
+  font-size: 15px;
+  text-align: center;
+  padding: 6px 12px;
+  border: 2px solid var(--selected);
+  border-radius: 12px;
+  outline: none;
+  background: #fff;
+  box-shadow: 0 4px 18px rgba(0,0,0,.18);
+}
