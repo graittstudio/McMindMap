@@ -150,6 +150,17 @@ button.ghost.danger { color: #c0392b; border-color: #e3b4ad; }
 
 #overlay { position: fixed; inset: 0; background: rgba(30,25,10,.28); z-index: 35; }
 
+#app-version {
+  position: fixed; right: 8px; bottom: 6px; z-index: 5;
+  font-size: 11px; color: #b3ada0; pointer-events: none; user-select: none;
+  letter-spacing: .2px;
+}
+.menu-version {
+  padding: 8px 14px 4px; font-size: 11px; color: #9a9588;
+  border-top: 1px solid #eee7d8;
+}
+body[data-theme="dark"] #app-version { color: #6b6f78; }
+
 /* Themes */
 body[data-theme="light"] { --bg: #fafafa; }
 body[data-theme="light"] #canvas { background: #fafafa; }

@@ -6,6 +6,7 @@
 // `$`, which would be a fatal redeclaration SyntaxError otherwise).
 (function () {
 
+const APP_VERSION = "v8 · 2026-05-26";
 const API = "api/index.php";
 const $ = (id) => document.getElementById(id);
 
@@ -236,6 +237,8 @@ function renderUser() {
 // ---- Boot -----------------------------------------------------------------
 
 async function boot() {
+  const verEl = $("app-version"); if (verEl) verEl.textContent = APP_VERSION;
+  const mverEl = $("menu-version"); if (mverEl) mverEl.textContent = "McMindMap " + APP_VERSION;
   let me;
   try { me = await api("me"); } catch (e) { location.replace("login.html"); return; }
   if (!me || !me.user) { location.replace("login.html"); return; }
