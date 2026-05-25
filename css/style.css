@@ -224,6 +224,12 @@ body[data-theme="dark"] .branch-text { stroke: rgba(20,22,26,.85); fill: #f0f0f2
 
 .node-image { cursor: pointer; }
 
+/* Inline add-branch buttons on the selected node */
+.add-btn { cursor: pointer; }
+.add-btn circle { filter: drop-shadow(0 1px 2px rgba(0,0,0,.25)); }
+.add-btn:hover circle { filter: drop-shadow(0 2px 4px rgba(0,0,0,.35)); }
+.add-plus { text-anchor: middle; dominant-baseline: middle; font-weight: 700; pointer-events: none; user-select: none; }
+
 #editor {
   position: fixed;
   z-index: 20;
