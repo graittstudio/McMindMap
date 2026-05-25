@@ -1,6 +1,10 @@
 "use strict";
 
 // Authentication + server persistence shell around the McMindMap editor.
+// Wrapped in an IIFE: app.js and shell.js are classic scripts sharing the
+// global scope, so top-level `const`s here must NOT leak (both files declare
+// `$`, which would be a fatal redeclaration SyntaxError otherwise).
+(function () {
 
 const API = "api/index.php";
 const $ = (id) => document.getElementById(id);
@@ -233,8 +237,8 @@ function renderUser() {
 
 async function boot() {
   let me;
-  try { me = await api("me"); } catch (e) { return; }
-  if (!me.user) { location.replace("login.html"); return; }
+  try { me = await api("me"); } catch (e) { location.replace("login.html"); return; }
+  if (!me || !me.user) { location.replace("login.html"); return; }
   if (me.user.must_change) { location.replace("login.html"); return; }
   user = me.user; csrf = me.csrf || "";
 
@@ -289,3 +293,5 @@ async function logout() {
 }
 
 boot();
+
+})();

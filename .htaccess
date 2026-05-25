@@ -1,0 +1,7 @@
+# Always revalidate HTML so a new deploy is picked up immediately.
+# Static assets (css/js) are cache-busted with a ?v= query instead.
+<IfModule mod_headers.c>
+    <FilesMatch "\.html$">
+        Header set Cache-Control "no-cache, must-revalidate"
+    </FilesMatch>
+</IfModule>
