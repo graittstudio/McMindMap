@@ -430,9 +430,15 @@ function addChild(parentId) {
     state.nodes[node.id] = node;
     selectedId = node.id; render(); save(); beginEdit(node.id); return;
   }
-  dir = parent.x >= state.nodes[state.rootId].x ? 1 : -1;
-  const x = parent.x + dir * 170;
-  const y = parent.y + sibs.length * 70 - (sibs.length * 70) / 2;
+  // Place the new sub-branch in the parent's outward (compass) direction —
+  // the direction from the grandparent to the parent — fanning siblings out.
+  const gp = state.nodes[parent.parentId];
+  const baseAng = Math.atan2(parent.y - gp.y, parent.x - gp.x);
+  const n = sibs.length;
+  const off = (n === 0) ? 0 : (n % 2 === 1 ? 1 : -1) * Math.ceil(n / 2) * 20 * Math.PI / 180;
+  const ang = baseAng + off;
+  const x = parent.x + Math.cos(ang) * 170;
+  const y = parent.y + Math.sin(ang) * 170;
   const node = newNode("idea", parentId, x, y, null);
   state.nodes[node.id] = node;
   selectedId = node.id; render(); save(); beginEdit(node.id);
@@ -461,6 +467,38 @@ function moveSubtree(id, dx, dy) {
     children(nid).forEach((c) => move(c.id));   // children() returns node objects, not ids
   };
   move(id);
+}
+
+function descendantsOf(id) {
+  const out = [];
+  const walk = (nid) => children(nid).forEach((c) => { out.push(c); walk(c.id); });
+  walk(id);
+  return out;
+}
+
+// Drag a node: move it by (dx,dy) AND swing its whole sub-tree around it by the
+// change in the node's compass direction from its parent. So when a branch is
+// dragged from east to west, every attached sub-branch swings to point west too.
+function dragSubtree(id, dx, dy) {
+  const n = state.nodes[id];
+  if (!n) return;
+  const oldX = n.x, oldY = n.y, newX = oldX + dx, newY = oldY + dy;
+  const parent = n.parentId ? state.nodes[n.parentId] : null;
+  let dA = 0;
+  if (parent) {
+    const r0 = Math.hypot(oldX - parent.x, oldY - parent.y);
+    const r1 = Math.hypot(newX - parent.x, newY - parent.y);
+    if (r0 > 1 && r1 > 1) {
+      dA = Math.atan2(newY - parent.y, newX - parent.x) - Math.atan2(oldY - parent.y, oldX - parent.x);
+    }
+  }
+  const cos = Math.cos(dA), sin = Math.sin(dA);
+  descendantsOf(id).forEach((D) => {
+    const rx = D.x - oldX, ry = D.y - oldY;     // rigidly rotate the sub-tree around the node
+    D.x = newX + (rx * cos - ry * sin);
+    D.y = newY + (rx * sin + ry * cos);
+  });
+  n.x = newX; n.y = newY;
 }
 
 function setColor(id, color) {
@@ -565,7 +603,7 @@ svg.addEventListener("pointermove", (e) => {
   const world = screenToWorld(e.clientX, e.clientY);
   const dx = world.x - drag.lastX, dy = world.y - drag.lastY;
   if (Math.abs(dx) > 4000 || Math.abs(dy) > 4000) return; // reject an implausible jump
-  moveSubtree(drag.id, dx, dy);
+  dragSubtree(drag.id, dx, dy);
   drag.lastX = world.x; drag.lastY = world.y;
   render();
 });
