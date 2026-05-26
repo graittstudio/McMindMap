@@ -99,6 +99,23 @@ input:focus {
   background: #fff;
 }
 
+.show-pw {
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.show-pw input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  background: none;
+}
+
 button {
   margin-top: 4px;
   font: inherit;
