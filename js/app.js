@@ -471,6 +471,30 @@ function moveSubtree(id, dx, dy) {
   move(id);
 }
 
+function descendantsOf(id) {
+  const out = [];
+  const walk = (nid) => children(nid).forEach((c) => { out.push(c); walk(c.id); });
+  walk(id);
+  return out;
+}
+
+// Drag handler: translate the node + its sub-tree, but the moment the node
+// crosses to the other horizontal side of its parent, mirror the sub-tree
+// left↔right so the side-branches flip to follow the branch's new direction.
+function dragNode(id, dx, dy) {
+  const node = state.nodes[id];
+  if (!node) return;
+  const parent = node.parentId ? state.nodes[node.parentId] : null;
+  const oldSide = parent ? Math.sign(node.x - parent.x) : 0;
+  moveSubtree(id, dx, dy);
+  if (parent) {
+    const newSide = Math.sign(node.x - parent.x);
+    if (oldSide && newSide && oldSide !== newSide) {
+      descendantsOf(id).forEach((d) => { d.x = 2 * node.x - d.x; });   // mirror about node.x
+    }
+  }
+}
+
 function setColor(id, color) {
   let n = state.nodes[id];
   if (!n || !n.parentId) return;
@@ -573,7 +597,7 @@ svg.addEventListener("pointermove", (e) => {
   const world = screenToWorld(e.clientX, e.clientY);
   const dx = world.x - drag.lastX, dy = world.y - drag.lastY;
   if (Math.abs(dx) > 4000 || Math.abs(dy) > 4000) return; // reject an implausible jump
-  moveSubtree(drag.id, dx, dy);
+  dragNode(drag.id, dx, dy);
   drag.lastX = world.x; drag.lastY = world.y;
   render();
 });
