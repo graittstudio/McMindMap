@@ -57,6 +57,28 @@ $("login-form").addEventListener("submit", async (e) => {
 $("login-show").addEventListener("change", (e) => {
   $("password").type = e.target.checked ? "text" : "password";
 });
+
+$("forgot-link").addEventListener("click", () => {
+  $("login-form").hidden = true;
+  $("reset-request-form").hidden = false;
+  $("reset-login").focus();
+});
+$("back-to-login").addEventListener("click", () => {
+  $("reset-request-form").hidden = true;
+  $("login-form").hidden = false;
+});
+$("reset-request-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = $("reset-request-btn"), msg = $("reset-request-msg");
+  msg.textContent = ""; msg.classList.remove("ok");
+  btn.disabled = true;
+  try {
+    await api("request_reset", { body: { login: $("reset-login").value } });
+  } catch (err) { /* never reveal errors here */ }
+  msg.classList.add("ok");
+  msg.textContent = "If that account exists, a reset link has been emailed. Check your inbox.";
+  btn.disabled = true;
+});
 $("change-show").addEventListener("change", (e) => {
   const t = e.target.checked ? "text" : "password";
   $("new-pw").type = t; $("new-pw2").type = t;

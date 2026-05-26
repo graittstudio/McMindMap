@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>McMindMap · Sign in</title>
-  <link rel="stylesheet" href="css/auth.css?v=3" />
+  <link rel="stylesheet" href="css/auth.css?v=4" />
 </head>
 <body>
   <svg class="bg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -32,6 +32,18 @@
       <label class="show-pw"><input type="checkbox" id="login-show" /> Show password</label>
       <button type="submit" id="login-btn">Sign in</button>
       <p class="msg" id="login-msg"></p>
+      <button type="button" id="forgot-link" class="linkish">Forgot password?</button>
+    </form>
+
+    <!-- Request a reset link -->
+    <form id="reset-request-form" hidden>
+      <p class="notice">Enter your username or email and we'll send you a link to reset your password.</p>
+      <label>Username or email
+        <input id="reset-login" type="text" autocomplete="username" required autofocus />
+      </label>
+      <button type="submit" id="reset-request-btn">Send reset link</button>
+      <p class="msg" id="reset-request-msg"></p>
+      <button type="button" id="back-to-login" class="linkish">Back to sign in</button>
     </form>
 
     <!-- Forced password change -->
@@ -49,6 +61,6 @@
     </form>
   </main>
 
-  <script src="js/auth.js?v=3"></script>
+  <script src="js/auth.js?v=4"></script>
 </body>
 </html>

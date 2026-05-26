@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>McMindMap</title>
-  <link rel="stylesheet" href="css/style.css?v=19" />
+  <link rel="stylesheet" href="css/style.css?v=20" />
   <script>window.__MCM_DEFER_BOOT__ = true;</script>
 </head>
 <body>
@@ -72,6 +72,9 @@
       <label>Display name
         <input id="pref-name" type="text" />
       </label>
+      <label>Email (for password reset)
+        <input id="pref-email" type="email" autocomplete="email" placeholder="you@example.com" />
+      </label>
       <label>Theme
         <select id="pref-theme">
           <option value="paper">Paper</option>
@@ -107,6 +110,7 @@
         <input id="nu-username" placeholder="username" />
         <select id="nu-role"><option value="user">user</option><option value="admin">admin</option></select>
         <input id="nu-name" placeholder="display name" />
+        <input id="nu-email" type="email" placeholder="email (optional)" />
         <input id="nu-pw" type="text" placeholder="temp password (min 8)" />
         <button id="nu-add" class="primary">Add</button>
       </div>
@@ -117,7 +121,7 @@
   <div id="overlay" hidden></div>
   <div id="app-version" title="App version"></div>
 
-  <script src="js/app.js?v=19"></script>
-  <script src="js/shell.js?v=19"></script>
+  <script src="js/app.js?v=20"></script>
+  <script src="js/shell.js?v=20"></script>
 </body>
 </html>

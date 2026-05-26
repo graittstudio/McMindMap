@@ -149,6 +149,7 @@ button.ghost.danger { color: #c0392b; border-color: #e3b4ad; }
 #users-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 #users-table th, #users-table td { text-align: left; padding: 7px 6px; border-bottom: 1px solid #f0ebdd; }
 #users-table td.actions { display: flex; gap: 6px; justify-content: flex-end; }
+#users-table .dim { color: #9a9588; font-size: 11px; }
 
 #overlay { position: fixed; inset: 0; background: rgba(30,25,10,.28); z-index: 35; }
 

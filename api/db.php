@@ -47,4 +47,24 @@ function init_schema(PDO $pdo): void {
         )
     ");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_maps_user ON maps(user_id)");
+
+    // Migration: add the email column to existing databases if missing.
+    $cols = $pdo->query("PRAGMA table_info(users)")->fetchAll(PDO::FETCH_COLUMN, 1);
+    if (!in_array('email', $cols, true)) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''");
+    }
+
+    // Password-reset tokens (only the SHA-256 hash is stored, single-use, with expiry).
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS password_resets (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER NOT NULL,
+            token_hash TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            used       INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_resets_hash ON password_resets(token_hash)");
 }
