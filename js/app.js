@@ -429,7 +429,7 @@ function addSibling(id) {
 function removeSubtree(id) {
   if (!state.nodes[id] || !state.nodes[id].parentId) return;  // never delete root
   const toDelete = [];
-  const collect = (nid) => { toDelete.push(nid); children(nid).forEach(collect); };
+  const collect = (nid) => { toDelete.push(nid); children(nid).forEach((c) => collect(c.id)); };
   collect(id);
   const parentId = state.nodes[id].parentId;
   toDelete.forEach((nid) => delete state.nodes[nid]);
@@ -440,7 +440,7 @@ function removeSubtree(id) {
 function moveSubtree(id, dx, dy) {
   const move = (nid) => {
     state.nodes[nid].x += dx; state.nodes[nid].y += dy;
-    children(nid).forEach(move);
+    children(nid).forEach((c) => move(c.id));   // children() returns node objects, not ids
   };
   move(id);
 }
