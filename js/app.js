@@ -65,6 +65,22 @@ function resolvedColor(node) {
 const changeListeners = [];
 function notifyChange() { changeListeners.forEach((cb) => { try { cb(); } catch (e) {} }); }
 
+// Drop any node not reachable from the root through valid parent links
+// (orphans left behind by older bugs, cycles, dangling parentIds). Without
+// this a single orphan makes render() throw and the whole UI never finishes.
+function sanitizeState() {
+  if (!state || !state.nodes || !state.rootId || !state.nodes[state.rootId]) return;
+  const keep = new Set([state.rootId]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const n of Object.values(state.nodes)) {
+      if (n.parentId && keep.has(n.parentId) && !keep.has(n.id)) { keep.add(n.id); grew = true; }
+    }
+  }
+  for (const id of Object.keys(state.nodes)) if (!keep.has(id)) delete state.nodes[id];
+}
+
 function save() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -108,6 +124,7 @@ function load() {
     nextId = doc.nextId || (Object.keys(doc.nodes).length + 1);
     if (doc.cam) cam = doc.cam;
     selectedId = state.rootId;
+    sanitizeState();
     return true;
   } catch (e) { return false; }
 }
@@ -202,6 +219,7 @@ function render() {
   for (const node of Object.values(state.nodes)) {
     if (!node.parentId) continue;
     const parent = state.nodes[node.parentId];
+    if (!parent) continue;                 // skip orphans defensively (also pruned on load)
     const start = attachStart(parent, node);
     const end = { x: node.x, y: node.y };
     const depth = depthOf(node);
@@ -689,10 +707,11 @@ window.MindMap = {
   newDoc() { freshDoc(); render(); centerRoot(); render(); resetHistory(); },
   getDoc() { return { nodes: state.nodes, rootId: state.rootId, nextId }; },
   loadDoc(doc) {
-    if (!doc || !doc.nodes || !doc.rootId) { this.newDoc(); return; }
+    if (!doc || !doc.nodes || !doc.rootId || !doc.nodes[doc.rootId]) { this.newDoc(); return; }
     state = { nodes: doc.nodes, rootId: doc.rootId };
     nextId = doc.nextId || (Object.keys(doc.nodes).length + 1);
     selectedId = state.rootId;
+    sanitizeState();
     render(); fit(); resetHistory();
   },
   onChange(cb) { changeListeners.push(cb); },
