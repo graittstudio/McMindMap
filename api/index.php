@@ -280,6 +280,16 @@ case 'reset_password':
     $st->execute([password_hash($password, PASSWORD_DEFAULT), $id]);
     out(['ok' => true]);
 
+case 'set_email':
+    if ($user['role'] !== 'admin') fail('admin only', 403);
+    if (!$isPost) fail('POST required', 405);
+    $b = body();
+    $id = (int)($b['id'] ?? 0);
+    $email = trim((string)($b['email'] ?? ''));
+    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) fail('invalid email address');
+    db()->prepare('UPDATE users SET email = ? WHERE id = ?')->execute([$email, $id]);
+    out(['ok' => true]);
+
 case 'delete_user':
     if ($user['role'] !== 'admin') fail('admin only', 403);
     if (!$isPost) fail('POST required', 405);
