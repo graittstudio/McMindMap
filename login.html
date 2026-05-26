@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>McMindMap · Sign in</title>
-  <link rel="stylesheet" href="css/auth.css?v=2" />
+  <link rel="stylesheet" href="css/auth.css?v=3" />
 </head>
 <body>
   <svg class="bg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -29,6 +29,7 @@
       <label>Password
         <input id="password" name="password" type="password" autocomplete="current-password" required />
       </label>
+      <label class="show-pw"><input type="checkbox" id="login-show" /> Show password</label>
       <button type="submit" id="login-btn">Sign in</button>
       <p class="msg" id="login-msg"></p>
     </form>
@@ -42,11 +43,12 @@
       <label>Confirm new password
         <input id="new-pw2" type="password" autocomplete="new-password" minlength="8" required />
       </label>
+      <label class="show-pw"><input type="checkbox" id="change-show" /> Show passwords</label>
       <button type="submit" id="change-btn">Set password &amp; continue</button>
       <p class="msg" id="change-msg"></p>
     </form>
   </main>
 
-  <script src="js/auth.js?v=2"></script>
+  <script src="js/auth.js?v=3"></script>
 </body>
 </html>

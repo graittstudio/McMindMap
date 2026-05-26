@@ -54,6 +54,14 @@ $("login-form").addEventListener("submit", async (e) => {
   }
 });
 
+$("login-show").addEventListener("change", (e) => {
+  $("password").type = e.target.checked ? "text" : "password";
+});
+$("change-show").addEventListener("change", (e) => {
+  const t = e.target.checked ? "text" : "password";
+  $("new-pw").type = t; $("new-pw2").type = t;
+});
+
 $("change-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const btn = $("change-btn"), msg = $("change-msg");

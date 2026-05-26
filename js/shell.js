@@ -6,7 +6,7 @@
 // `$`, which would be a fatal redeclaration SyntaxError otherwise).
 (function () {
 
-const APP_VERSION = "v18 · 2026-05-26";
+const APP_VERSION = "v19 · 2026-05-26";
 const API = "api/index.php";
 const $ = (id) => document.getElementById(id);
 
@@ -146,7 +146,9 @@ function closeAll() { $("maps-drawer").hidden = $("prefs-modal").hidden = $("adm
 function openPrefs() {
   $("pref-name").value = displayName();
   $("pref-theme").value = prefs().theme || "paper";
-  $("pref-current").value = ""; $("pref-newpw").value = "";
+  $("pref-current").value = ""; $("pref-newpw").value = ""; $("pref-newpw2").value = "";
+  $("pref-show").checked = false;
+  ["pref-current", "pref-newpw", "pref-newpw2"].forEach((id) => { $(id).type = "password"; });
   $("prefs-msg").textContent = "";
   $("prefs-modal").hidden = false; $("overlay").hidden = false; $("user-menu").hidden = true;
 }
@@ -157,6 +159,7 @@ async function savePrefsModal() {
   try {
     if (newpw) {
       if (newpw.length < 8) { msg.textContent = "New password must be at least 8 characters."; return; }
+      if (newpw !== $("pref-newpw2").value) { msg.textContent = "The two new passwords do not match."; return; }
       await api("change_password", { body: { current: $("pref-current").value, new: newpw } });
     }
     await savePrefs({ display_name: $("pref-name").value.trim(), theme: $("pref-theme").value });
@@ -286,6 +289,10 @@ function wireChrome() {
 
   document.querySelectorAll(".modal .close").forEach((b) => b.addEventListener("click", closeAll));
   $("prefs-save").addEventListener("click", savePrefsModal);
+  $("pref-show").addEventListener("change", (e) => {
+    const t = e.target.checked ? "text" : "password";
+    ["pref-current", "pref-newpw", "pref-newpw2"].forEach((id) => { $(id).type = t; });
+  });
   $("nu-add").addEventListener("click", addUser);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAll(); });
 }

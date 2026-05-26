@@ -133,6 +133,8 @@ button.chrome {
   font: inherit; padding: 9px 11px; border: 1.5px solid #e0ddd5; border-radius: 9px; background: #fcfbf8;
 }
 .dialog input:focus, .dialog select:focus { outline: none; border-color: var(--accent, #b8860b); }
+.dialog .show-pw { flex-direction: row; align-items: center; gap: 7px; font-weight: 500; color: #8a857a; cursor: pointer; }
+.dialog .show-pw input[type="checkbox"] { width: auto; padding: 0; border: none; }
 .dialog hr { border: none; border-top: 1px solid #eee7d8; margin: 4px 0; width: 100%; }
 .dialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .dialog .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
