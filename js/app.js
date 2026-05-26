@@ -289,31 +289,58 @@ function drawRoot(node) {
   labelWorld[node.id] = { x: node.x, y: node.y };
 }
 
+// Label runs ALONG the branch curve (textPath) and ends at the tip, so it
+// follows the branch shape and stacked siblings don't overlap (their tips are
+// spread out). A hidden reference centre-line is built left-to-right (text
+// stays upright) and extended on the parent side so long words never clip.
 function drawLabel(node, start, end, color, depth) {
-  const [c1, c2] = controls(start, end);
-  const mid = bezier(start, c1, c2, end, 0.5);
-  const tan = bezierTangent(start, c1, c2, end, 0.5);
-  let ang = Math.atan2(tan.y, tan.x) * 180 / Math.PI;
-  if (ang > 90 || ang < -90) ang += 180;            // keep text upright
+  const S = start, E = end;
+  const [c1, c2] = controls(S, E);
+  const tipRight = E.x >= S.x;
   const fs = fontForDepth(depth);
   const half = (widthForDepth(depth) + widthForDepth(depth + 1)) / 4;
+  const EXT = 1000;
+  const pathId = "lbl-" + node.id;
 
   const g = document.createElementNS(SVG_NS, "g");
   g.setAttribute("class", "label" + (node.id === selectedId ? " selected" : ""));
-  g.setAttribute("transform", `translate(${mid.x} ${mid.y}) rotate(${ang})`);
   g.dataset.id = node.id;
+
+  const cp = document.createElementNS(SVG_NS, "path");
+  let d, anchor, offset;
+  if (tipRight) {                                  // tip is the right end → word ENDS there
+    d = `M ${(S.x - EXT).toFixed(1)} ${S.y.toFixed(1)} L ${S.x.toFixed(1)} ${S.y.toFixed(1)} ` +
+        `C ${c1.x.toFixed(1)} ${c1.y.toFixed(1)} ${c2.x.toFixed(1)} ${c2.y.toFixed(1)} ${E.x.toFixed(1)} ${E.y.toFixed(1)}`;
+    anchor = "end"; offset = "100%";
+  } else {                                         // tip is the left end → word STARTS there
+    d = `M ${E.x.toFixed(1)} ${E.y.toFixed(1)} C ${c2.x.toFixed(1)} ${c2.y.toFixed(1)} ${c1.x.toFixed(1)} ${c1.y.toFixed(1)} ${S.x.toFixed(1)} ${S.y.toFixed(1)} ` +
+        `L ${(S.x + EXT).toFixed(1)} ${S.y.toFixed(1)}`;
+    anchor = "start"; offset = "0";
+  }
+  cp.setAttribute("d", d);
+  cp.setAttribute("fill", "none");
+  cp.setAttribute("stroke", "none");
+  cp.setAttribute("id", pathId);
+  cp.setAttribute("pointer-events", "none");
+  g.appendChild(cp);
 
   const text = document.createElementNS(SVG_NS, "text");
   text.setAttribute("class", "branch-text");
-  text.setAttribute("x", 0);
-  text.setAttribute("y", -(half + 5));
   text.setAttribute("font-size", fs);
   text.setAttribute("fill", darken(color, 0.45));
-  text.textContent = node.text || " ";
+  text.style.textAnchor = anchor;                  // inline style beats the .branch-text CSS
+  text.setAttribute("dy", -(half + 5));            // float just above the branch
+  const tp = document.createElementNS(SVG_NS, "textPath");
+  tp.setAttributeNS("http://www.w3.org/1999/xlink", "href", "#" + pathId);
+  tp.setAttribute("href", "#" + pathId);
+  tp.setAttribute("startOffset", offset);
+  tp.textContent = node.text || " ";
+  text.appendChild(tp);
   g.appendChild(text);
   gNodes.appendChild(g);
 
-  labelWorld[node.id] = { x: mid.x, y: mid.y };
+  const anchorPt = bezier(S, c1, c2, E, 0.78);      // editor opens near the tip
+  labelWorld[node.id] = { x: anchorPt.x, y: anchorPt.y };
 }
 
 // The picture becomes the node: centred on the node's point so the incoming
