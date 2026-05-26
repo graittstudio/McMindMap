@@ -164,24 +164,23 @@ function bezierTangent(p0, c1, c2, p1, t) {
   };
 }
 
-// Organic control points: the branch leaves its parent heading in `startDir`
-// (the direction the parent branch was flowing) and curves in to the child.
-// This makes branches curve naturally in ANY orientation instead of going
-// dead-straight when vertical/diagonal (which looked like rake tines).
-function controls(p0, p1, startDir) {
+// Control points give branches a gentle hand-drawn S-curve. The tangents are
+// tilted off the straight chord by a fixed angle, so a branch bows organically
+// in ANY orientation (vertical/diagonal too) instead of going dead-straight.
+const CURVE_TILT = 20 * Math.PI / 180;
+function controls(p0, p1) {
   const dx = p1.x - p0.x, dy = p1.y - p0.y;
   const dist = Math.hypot(dx, dy) || 1;
-  const k = dist * 0.42;
-  const chord = { x: dx / dist, y: dy / dist };
-  const sd = startDir || chord;
+  const k = dist * 0.5;
+  const a = Math.atan2(dy, dx);
   return [
-    { x: p0.x + sd.x * k, y: p0.y + sd.y * k },
-    { x: p1.x - chord.x * k, y: p1.y - chord.y * k },
+    { x: p0.x + Math.cos(a + CURVE_TILT) * k, y: p0.y + Math.sin(a + CURVE_TILT) * k },
+    { x: p1.x - Math.cos(a - CURVE_TILT) * k, y: p1.y - Math.sin(a - CURVE_TILT) * k },
   ];
 }
 
-function branchPath(p0, p1, w0, w1, startDir) {
-  const [c1, c2] = controls(p0, p1, startDir);
+function branchPath(p0, p1, w0, w1) {
+  const [c1, c2] = controls(p0, p1);
   const N = 28;
   const left = [], right = [];
   for (let i = 0; i <= N; i++) {
@@ -234,25 +233,14 @@ function render() {
     const w0 = widthForDepth(depth);
     const w1 = Math.max(2.5, widthForDepth(depth + 1) * 0.7);
 
-    // Branch leaves its parent flowing in the parent's outward heading (so it
-    // curves organically); branches off the centre just head outward radially.
-    let startDir = null;
-    if (parent.parentId) {
-      const gp = state.nodes[parent.parentId];
-      if (gp) {
-        const a = Math.atan2(parent.y - gp.y, parent.x - gp.x);
-        startDir = { x: Math.cos(a), y: Math.sin(a) };
-      }
-    }
-
     const path = document.createElementNS(SVG_NS, "path");
     path.setAttribute("class", "branch" + (node.id === selectedId ? " selected" : ""));
-    path.setAttribute("d", branchPath(start, end, w0, w1, startDir));
+    path.setAttribute("d", branchPath(start, end, w0, w1));
     path.setAttribute("fill", color);
     path.dataset.id = node.id;
     gBranches.appendChild(path);
 
-    drawLabel(node, start, end, color, depth, startDir);
+    drawLabel(node, start, end, color, depth);
     if (node.image) drawImage(node);          // image IS the node, centred on its point
     drawHandle(node, color);                  // grab handle on top — the ONLY drag target
   }
@@ -305,8 +293,8 @@ function drawRoot(node) {
   labelWorld[node.id] = { x: node.x, y: node.y };
 }
 
-function drawLabel(node, start, end, color, depth, startDir) {
-  const [c1, c2] = controls(start, end, startDir);
+function drawLabel(node, start, end, color, depth) {
+  const [c1, c2] = controls(start, end);
   const mid = bezier(start, c1, c2, end, 0.5);
   const tan = bezierTangent(start, c1, c2, end, 0.5);
   let ang = Math.atan2(tan.y, tan.x) * 180 / Math.PI;
@@ -448,7 +436,8 @@ function addChild(parentId) {
     state.nodes[node.id] = node;
     selectedId = node.id; render(); save(); beginEdit(node.id); return;
   }
-  // Sub-branches auto-arrange: add then re-fan all of the parent's children.
+  // Sub-branches are generated: add the node, then re-fan all of the parent's
+  // children proportionally around the parent's outward heading.
   const node = newNode("idea", parentId, parent.x, parent.y, null);
   state.nodes[node.id] = node;
   layoutSubtree(parentId);
@@ -468,11 +457,12 @@ function removeSubtree(id) {
   collect(id);
   const parentId = state.nodes[id].parentId;
   toDelete.forEach((nid) => delete state.nodes[nid]);
-  if (parentId) layoutSubtree(parentId);   // close the gap / re-fan remaining sub-branches
+  if (parentId && state.nodes[parentId].parentId) layoutSubtree(parentId); // re-fan remaining
   selectedId = parentId || state.rootId;
   save(); render();
 }
 
+// Translate a node + its whole sub-tree rigidly (used when moving the centre).
 function moveSubtree(id, dx, dy) {
   const move = (nid) => {
     state.nodes[nid].x += dx; state.nodes[nid].y += dy;
@@ -481,25 +471,18 @@ function moveSubtree(id, dx, dy) {
   move(id);
 }
 
-// Outward compass direction of a node (parent → node), the heading its own
-// sub-branches continue along.
-function outwardAngle(node) {
-  const p = node.parentId ? state.nodes[node.parentId] : null;
-  if (!p) return 0;
-  return Math.atan2(node.y - p.y, node.x - p.x);
-}
-
-// Automatically arrange a node's sub-branches: fan its children out along its
-// outward heading, then recurse. The root's own children (the main branches)
-// are left where the user placed them; everything below auto-arranges.
+// Generate (re-render) a node's sub-branches: fan its children proportionally
+// around its outward heading, then recurse. Keeps the sub-tree in proportion to
+// the rest of the map. The root's own children (main branches) stay user-placed.
 function layoutSubtree(id) {
   const node = state.nodes[id];
   if (!node) return;
   const kids = children(id);
   if (kids.length && node.parentId) {
-    const base = outwardAngle(node);
-    const len = Math.max(120, 175 - depthOf(node) * 12);
-    const spread = Math.min(150, (kids.length - 1) * 30) * Math.PI / 180;
+    const p = state.nodes[node.parentId];
+    const base = Math.atan2(node.y - p.y, node.x - p.x);   // outward heading
+    const len = Math.max(115, 180 - depthOf(node) * 14);
+    const spread = Math.min(160, (kids.length - 1) * 34) * Math.PI / 180;
     kids.forEach((k, i) => {
       const a = base + (kids.length === 1 ? 0 : (i / (kids.length - 1) - 0.5) * spread);
       k.x = node.x + Math.cos(a) * len;
@@ -509,9 +492,9 @@ function layoutSubtree(id) {
   kids.forEach((k) => layoutSubtree(k.id));
 }
 
-// Drag a node: reposition it freely; its sub-branches then re-flow (fan out)
-// around the new position instead of moving as a rigid block. Dragging the
-// centre moves the whole map.
+// Drag a node: reposition it freely, then regenerate its sub-branches so they
+// re-flow proportionally around the new position. Dragging the centre moves
+// the whole map.
 function dragSubtree(id, dx, dy) {
   const node = state.nodes[id];
   if (!node) return;
