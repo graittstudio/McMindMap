@@ -164,17 +164,24 @@ function bezierTangent(p0, c1, c2, p1, t) {
   };
 }
 
-// Control points give branches a gentle S-curve like a hand-drawn map.
-function controls(p0, p1) {
-  const dx = p1.x - p0.x;
+// Organic control points: the branch leaves its parent heading in `startDir`
+// (the direction the parent branch was flowing) and curves in to the child.
+// This makes branches curve naturally in ANY orientation instead of going
+// dead-straight when vertical/diagonal (which looked like rake tines).
+function controls(p0, p1, startDir) {
+  const dx = p1.x - p0.x, dy = p1.y - p0.y;
+  const dist = Math.hypot(dx, dy) || 1;
+  const k = dist * 0.42;
+  const chord = { x: dx / dist, y: dy / dist };
+  const sd = startDir || chord;
   return [
-    { x: p0.x + dx * 0.45, y: p0.y },
-    { x: p1.x - dx * 0.45, y: p1.y },
+    { x: p0.x + sd.x * k, y: p0.y + sd.y * k },
+    { x: p1.x - chord.x * k, y: p1.y - chord.y * k },
   ];
 }
 
-function branchPath(p0, p1, w0, w1) {
-  const [c1, c2] = controls(p0, p1);
+function branchPath(p0, p1, w0, w1, startDir) {
+  const [c1, c2] = controls(p0, p1, startDir);
   const N = 28;
   const left = [], right = [];
   for (let i = 0; i <= N; i++) {
@@ -227,14 +234,25 @@ function render() {
     const w0 = widthForDepth(depth);
     const w1 = Math.max(2.5, widthForDepth(depth + 1) * 0.7);
 
+    // Branch leaves its parent flowing in the parent's outward heading (so it
+    // curves organically); branches off the centre just head outward radially.
+    let startDir = null;
+    if (parent.parentId) {
+      const gp = state.nodes[parent.parentId];
+      if (gp) {
+        const a = Math.atan2(parent.y - gp.y, parent.x - gp.x);
+        startDir = { x: Math.cos(a), y: Math.sin(a) };
+      }
+    }
+
     const path = document.createElementNS(SVG_NS, "path");
     path.setAttribute("class", "branch" + (node.id === selectedId ? " selected" : ""));
-    path.setAttribute("d", branchPath(start, end, w0, w1));
+    path.setAttribute("d", branchPath(start, end, w0, w1, startDir));
     path.setAttribute("fill", color);
     path.dataset.id = node.id;
     gBranches.appendChild(path);
 
-    drawLabel(node, start, end, color, depth);
+    drawLabel(node, start, end, color, depth, startDir);
     if (node.image) drawImage(node);          // image IS the node, centred on its point
     drawHandle(node, color);                  // grab handle on top — the ONLY drag target
   }
@@ -287,8 +305,8 @@ function drawRoot(node) {
   labelWorld[node.id] = { x: node.x, y: node.y };
 }
 
-function drawLabel(node, start, end, color, depth) {
-  const [c1, c2] = controls(start, end);
+function drawLabel(node, start, end, color, depth, startDir) {
+  const [c1, c2] = controls(start, end, startDir);
   const mid = bezier(start, c1, c2, end, 0.5);
   const tan = bezierTangent(start, c1, c2, end, 0.5);
   let ang = Math.atan2(tan.y, tan.x) * 180 / Math.PI;
