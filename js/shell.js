@@ -6,7 +6,7 @@
 // `$`, which would be a fatal redeclaration SyntaxError otherwise).
 (function () {
 
-const APP_VERSION = "v19 · 2026-05-26";
+const APP_VERSION = "v20 · 2026-05-26";
 const API = "api/index.php";
 const $ = (id) => document.getElementById(id);
 
@@ -145,6 +145,7 @@ function closeAll() { $("maps-drawer").hidden = $("prefs-modal").hidden = $("adm
 
 function openPrefs() {
   $("pref-name").value = displayName();
+  $("pref-email").value = (user && user.email) || "";
   $("pref-theme").value = prefs().theme || "paper";
   $("pref-current").value = ""; $("pref-newpw").value = ""; $("pref-newpw2").value = "";
   $("pref-show").checked = false;
@@ -162,7 +163,10 @@ async function savePrefsModal() {
       if (newpw !== $("pref-newpw2").value) { msg.textContent = "The two new passwords do not match."; return; }
       await api("change_password", { body: { current: $("pref-current").value, new: newpw } });
     }
-    await savePrefs({ display_name: $("pref-name").value.trim(), theme: $("pref-theme").value });
+    const email = $("pref-email").value.trim();
+    user.prefs = Object.assign({}, prefs(), { display_name: $("pref-name").value.trim(), theme: $("pref-theme").value });
+    await api("save_prefs", { body: { prefs: user.prefs, email } });
+    user.email = email;
     applyTheme(prefs().theme);
     renderUser();
     msg.className = "msg ok"; msg.textContent = "Saved.";
@@ -184,7 +188,8 @@ async function refreshUsers() {
   tb.innerHTML = "";
   for (const u of r.users) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${escapeHtml(u.username)}</td><td>${u.role}</td><td>${escapeHtml(u.display_name)}</td>`;
+    tr.innerHTML = `<td>${escapeHtml(u.username)}</td><td>${u.role}</td>` +
+      `<td>${escapeHtml(u.display_name)}${u.email ? '<br><span class="dim">' + escapeHtml(u.email) + '</span>' : ''}</td>`;
     const td = document.createElement("td"); td.className = "actions";
     const reset = document.createElement("button"); reset.textContent = "Reset pw"; reset.className = "ghost sm";
     reset.addEventListener("click", () => resetPw(u));
@@ -217,9 +222,10 @@ async function addUser() {
       username: $("nu-username").value.trim(),
       role: $("nu-role").value,
       display_name: $("nu-name").value.trim(),
+      email: $("nu-email").value.trim(),
       password: $("nu-pw").value,
     } });
-    $("nu-username").value = $("nu-name").value = $("nu-pw").value = "";
+    $("nu-username").value = $("nu-name").value = $("nu-email").value = $("nu-pw").value = "";
     await refreshUsers();
     flashAdmin("User created.", true);
   } catch (e) { flashAdmin(e.message, false); }

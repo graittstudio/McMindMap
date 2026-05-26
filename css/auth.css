@@ -138,6 +138,20 @@ button:disabled { opacity: .6; cursor: default; }
   font-size: 13.5px;
   color: var(--text);
 }
+
+.linkish {
+  align-self: flex-start;
+  margin: -2px 0 0;
+  padding: 4px 0;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  width: auto;
+}
+.linkish:hover { text-decoration: underline; filter: none; }
 .msg {
   margin: 2px 0 0;
   min-height: 18px;

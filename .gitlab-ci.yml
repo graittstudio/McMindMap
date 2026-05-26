@@ -20,7 +20,7 @@ lint:
     - 'echo "PHP syntax check…"; for f in api/*.php; do php -l "$f"; done'
     - 'if find . -name "*.db" -not -path "./.git/*" | grep -q .; then echo "DB file committed!"; exit 1; fi'
     - export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && nvm use 20 || true
-    - 'for f in js/app.js js/shell.js js/auth.js; do node --check "$f"; done'
+    - 'for f in js/app.js js/shell.js js/auth.js js/reset.js; do node --check "$f"; done'
     - echo "OK"
 
 # ── Deploy ──────────────────────────────────────────────────────────────────
