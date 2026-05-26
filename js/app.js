@@ -164,18 +164,14 @@ function bezierTangent(p0, c1, c2, p1, t) {
   };
 }
 
-// Control points give branches a gentle hand-drawn S-curve. The tangents are
-// tilted off the straight chord by a fixed angle, so a branch bows organically
-// in ANY orientation (vertical/diagonal too) instead of going dead-straight.
-const CURVE_TILT = 20 * Math.PI / 180;
+// Control points give branches a hand-drawn S-curve. Horizontal tangents make
+// the curve follow the actual geometry of each branch, so every branch curves
+// differently depending on its direction (dynamic, organic).
 function controls(p0, p1) {
-  const dx = p1.x - p0.x, dy = p1.y - p0.y;
-  const dist = Math.hypot(dx, dy) || 1;
-  const k = dist * 0.5;
-  const a = Math.atan2(dy, dx);
+  const dx = p1.x - p0.x;
   return [
-    { x: p0.x + Math.cos(a + CURVE_TILT) * k, y: p0.y + Math.sin(a + CURVE_TILT) * k },
-    { x: p1.x - Math.cos(a - CURVE_TILT) * k, y: p1.y - Math.sin(a - CURVE_TILT) * k },
+    { x: p0.x + dx * 0.45, y: p0.y },
+    { x: p1.x - dx * 0.45, y: p1.y },
   ];
 }
 
@@ -436,11 +432,15 @@ function addChild(parentId) {
     state.nodes[node.id] = node;
     selectedId = node.id; render(); save(); beginEdit(node.id); return;
   }
-  // Sub-branches are generated: add the node, then re-fan all of the parent's
-  // children proportionally around the parent's outward heading.
-  const node = newNode("idea", parentId, parent.x, parent.y, null);
+  // Place the new sub-branch in the parent's outward direction (grandparent →
+  // parent), fanning siblings around that heading. Free to drag afterwards.
+  const gp = state.nodes[parent.parentId];
+  const baseAng = Math.atan2(parent.y - gp.y, parent.x - gp.x);
+  const n = sibs.length;
+  const off = (n === 0) ? 0 : (n % 2 === 1 ? 1 : -1) * Math.ceil(n / 2) * 24 * Math.PI / 180;
+  const ang = baseAng + off;
+  const node = newNode("idea", parentId, parent.x + Math.cos(ang) * 160, parent.y + Math.sin(ang) * 160, null);
   state.nodes[node.id] = node;
-  layoutSubtree(parentId);
   selectedId = node.id; render(); save(); beginEdit(node.id);
 }
 
@@ -457,50 +457,18 @@ function removeSubtree(id) {
   collect(id);
   const parentId = state.nodes[id].parentId;
   toDelete.forEach((nid) => delete state.nodes[nid]);
-  if (parentId && state.nodes[parentId].parentId) layoutSubtree(parentId); // re-fan remaining
   selectedId = parentId || state.rootId;
   save(); render();
 }
 
-// Translate a node + its whole sub-tree rigidly (used when moving the centre).
+// Drag a node and everything hanging off it as one piece (free translation),
+// so the sub-tree keeps its organic hand-made shape.
 function moveSubtree(id, dx, dy) {
   const move = (nid) => {
     state.nodes[nid].x += dx; state.nodes[nid].y += dy;
     children(nid).forEach((c) => move(c.id));   // children() returns node objects, not ids
   };
   move(id);
-}
-
-// Generate (re-render) a node's sub-branches: fan its children proportionally
-// around its outward heading, then recurse. Keeps the sub-tree in proportion to
-// the rest of the map. The root's own children (main branches) stay user-placed.
-function layoutSubtree(id) {
-  const node = state.nodes[id];
-  if (!node) return;
-  const kids = children(id);
-  if (kids.length && node.parentId) {
-    const p = state.nodes[node.parentId];
-    const base = Math.atan2(node.y - p.y, node.x - p.x);   // outward heading
-    const len = Math.max(115, 180 - depthOf(node) * 14);
-    const spread = Math.min(160, (kids.length - 1) * 34) * Math.PI / 180;
-    kids.forEach((k, i) => {
-      const a = base + (kids.length === 1 ? 0 : (i / (kids.length - 1) - 0.5) * spread);
-      k.x = node.x + Math.cos(a) * len;
-      k.y = node.y + Math.sin(a) * len;
-    });
-  }
-  kids.forEach((k) => layoutSubtree(k.id));
-}
-
-// Drag a node: reposition it freely, then regenerate its sub-branches so they
-// re-flow proportionally around the new position. Dragging the centre moves
-// the whole map.
-function dragSubtree(id, dx, dy) {
-  const node = state.nodes[id];
-  if (!node) return;
-  if (!node.parentId) { moveSubtree(id, dx, dy); return; }
-  node.x += dx; node.y += dy;
-  layoutSubtree(id);
 }
 
 function setColor(id, color) {
@@ -605,7 +573,7 @@ svg.addEventListener("pointermove", (e) => {
   const world = screenToWorld(e.clientX, e.clientY);
   const dx = world.x - drag.lastX, dy = world.y - drag.lastY;
   if (Math.abs(dx) > 4000 || Math.abs(dy) > 4000) return; // reject an implausible jump
-  dragSubtree(drag.id, dx, dy);
+  moveSubtree(drag.id, dx, dy);
   drag.lastX = world.x; drag.lastY = world.y;
   render();
 });
