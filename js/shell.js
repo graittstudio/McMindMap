@@ -6,7 +6,7 @@
 // `$`, which would be a fatal redeclaration SyntaxError otherwise).
 (function () {
 
-const APP_VERSION = "v20 · 2026-05-26";
+const APP_VERSION = "v21 · 2026-05-26";
 const API = "api/index.php";
 const $ = (id) => document.getElementById(id);
 
@@ -191,6 +191,9 @@ async function refreshUsers() {
     tr.innerHTML = `<td>${escapeHtml(u.username)}</td><td>${u.role}</td>` +
       `<td>${escapeHtml(u.display_name)}${u.email ? '<br><span class="dim">' + escapeHtml(u.email) + '</span>' : ''}</td>`;
     const td = document.createElement("td"); td.className = "actions";
+    const setEmail = document.createElement("button"); setEmail.textContent = "Email"; setEmail.className = "ghost sm";
+    setEmail.addEventListener("click", () => editEmail(u));
+    td.appendChild(setEmail);
     const reset = document.createElement("button"); reset.textContent = "Reset pw"; reset.className = "ghost sm";
     reset.addEventListener("click", () => resetPw(u));
     td.appendChild(reset);
@@ -201,6 +204,13 @@ async function refreshUsers() {
     }
     tr.appendChild(td); tb.appendChild(tr);
   }
+}
+
+async function editEmail(u) {
+  const email = prompt(`Email address for "${u.username}" (used for password reset; leave blank to clear):`, u.email || "");
+  if (email === null) return;
+  try { await api("set_email", { body: { id: u.id, email: email.trim() } }); await refreshUsers(); flashAdmin(`Email updated for ${u.username}.`, true); }
+  catch (e) { flashAdmin(e.message, false); }
 }
 
 async function resetPw(u) {
