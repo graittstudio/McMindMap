@@ -422,25 +422,18 @@ function addChild(parentId) {
   const parent = state.nodes[parentId];
   if (!parent) return;
   const sibs = children(parentId);
-  let dir;
   if (!parent.parentId) {
-    const ang = (sibs.length * 49) % 360 * Math.PI / 180;   // fan around the centre
+    // Main branches radiate around the centre and stay where the user puts them.
+    const ang = (sibs.length * 49) % 360 * Math.PI / 180;
     const r = 220;
     const node = newNode("idea", parentId, parent.x + Math.cos(ang) * r, parent.y + Math.sin(ang) * r, null);
     state.nodes[node.id] = node;
     selectedId = node.id; render(); save(); beginEdit(node.id); return;
   }
-  // Place the new sub-branch in the parent's outward (compass) direction —
-  // the direction from the grandparent to the parent — fanning siblings out.
-  const gp = state.nodes[parent.parentId];
-  const baseAng = Math.atan2(parent.y - gp.y, parent.x - gp.x);
-  const n = sibs.length;
-  const off = (n === 0) ? 0 : (n % 2 === 1 ? 1 : -1) * Math.ceil(n / 2) * 20 * Math.PI / 180;
-  const ang = baseAng + off;
-  const x = parent.x + Math.cos(ang) * 170;
-  const y = parent.y + Math.sin(ang) * 170;
-  const node = newNode("idea", parentId, x, y, null);
+  // Sub-branches auto-arrange: add then re-fan all of the parent's children.
+  const node = newNode("idea", parentId, parent.x, parent.y, null);
   state.nodes[node.id] = node;
+  layoutSubtree(parentId);
   selectedId = node.id; render(); save(); beginEdit(node.id);
 }
 
@@ -457,6 +450,7 @@ function removeSubtree(id) {
   collect(id);
   const parentId = state.nodes[id].parentId;
   toDelete.forEach((nid) => delete state.nodes[nid]);
+  if (parentId) layoutSubtree(parentId);   // close the gap / re-fan remaining sub-branches
   selectedId = parentId || state.rootId;
   save(); render();
 }
@@ -469,36 +463,43 @@ function moveSubtree(id, dx, dy) {
   move(id);
 }
 
-function descendantsOf(id) {
-  const out = [];
-  const walk = (nid) => children(nid).forEach((c) => { out.push(c); walk(c.id); });
-  walk(id);
-  return out;
+// Outward compass direction of a node (parent → node), the heading its own
+// sub-branches continue along.
+function outwardAngle(node) {
+  const p = node.parentId ? state.nodes[node.parentId] : null;
+  if (!p) return 0;
+  return Math.atan2(node.y - p.y, node.x - p.x);
 }
 
-// Drag a node: move it by (dx,dy) AND swing its whole sub-tree around it by the
-// change in the node's compass direction from its parent. So when a branch is
-// dragged from east to west, every attached sub-branch swings to point west too.
-function dragSubtree(id, dx, dy) {
-  const n = state.nodes[id];
-  if (!n) return;
-  const oldX = n.x, oldY = n.y, newX = oldX + dx, newY = oldY + dy;
-  const parent = n.parentId ? state.nodes[n.parentId] : null;
-  let dA = 0;
-  if (parent) {
-    const r0 = Math.hypot(oldX - parent.x, oldY - parent.y);
-    const r1 = Math.hypot(newX - parent.x, newY - parent.y);
-    if (r0 > 1 && r1 > 1) {
-      dA = Math.atan2(newY - parent.y, newX - parent.x) - Math.atan2(oldY - parent.y, oldX - parent.x);
-    }
+// Automatically arrange a node's sub-branches: fan its children out along its
+// outward heading, then recurse. The root's own children (the main branches)
+// are left where the user placed them; everything below auto-arranges.
+function layoutSubtree(id) {
+  const node = state.nodes[id];
+  if (!node) return;
+  const kids = children(id);
+  if (kids.length && node.parentId) {
+    const base = outwardAngle(node);
+    const len = Math.max(120, 175 - depthOf(node) * 12);
+    const spread = Math.min(150, (kids.length - 1) * 30) * Math.PI / 180;
+    kids.forEach((k, i) => {
+      const a = base + (kids.length === 1 ? 0 : (i / (kids.length - 1) - 0.5) * spread);
+      k.x = node.x + Math.cos(a) * len;
+      k.y = node.y + Math.sin(a) * len;
+    });
   }
-  const cos = Math.cos(dA), sin = Math.sin(dA);
-  descendantsOf(id).forEach((D) => {
-    const rx = D.x - oldX, ry = D.y - oldY;     // rigidly rotate the sub-tree around the node
-    D.x = newX + (rx * cos - ry * sin);
-    D.y = newY + (rx * sin + ry * cos);
-  });
-  n.x = newX; n.y = newY;
+  kids.forEach((k) => layoutSubtree(k.id));
+}
+
+// Drag a node: reposition it freely; its sub-branches then re-flow (fan out)
+// around the new position instead of moving as a rigid block. Dragging the
+// centre moves the whole map.
+function dragSubtree(id, dx, dy) {
+  const node = state.nodes[id];
+  if (!node) return;
+  if (!node.parentId) { moveSubtree(id, dx, dy); return; }
+  node.x += dx; node.y += dy;
+  layoutSubtree(id);
 }
 
 function setColor(id, color) {
