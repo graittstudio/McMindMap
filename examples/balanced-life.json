@@ -1,0 +1,231 @@
+{
+  "nodes": {
+    "n1": {
+      "id": "n1",
+      "text": "Balanced Life",
+      "parentId": null,
+      "x": 0,
+      "y": 0,
+      "color": null,
+      "image": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2064%2064'%3E%3Ccircle%20cx%3D'32'%20cy%3D'32'%20r%3D'13'%20fill%3D'%23f4b400'%2F%3E%3Cg%20stroke%3D'%23f4b400'%20stroke-width%3D'4'%20stroke-linecap%3D'round'%3E%3Cline%20x1%3D'32'%20y1%3D'4'%20x2%3D'32'%20y2%3D'13'%2F%3E%3Cline%20x1%3D'32'%20y1%3D'51'%20x2%3D'32'%20y2%3D'60'%2F%3E%3Cline%20x1%3D'4'%20y1%3D'32'%20x2%3D'13'%20y2%3D'32'%2F%3E%3Cline%20x1%3D'51'%20y1%3D'32'%20x2%3D'60'%20y2%3D'32'%2F%3E%3Cline%20x1%3D'12'%20y1%3D'12'%20x2%3D'19'%20y2%3D'19'%2F%3E%3Cline%20x1%3D'45'%20y1%3D'45'%20x2%3D'52'%20y2%3D'52'%2F%3E%3Cline%20x1%3D'52'%20y1%3D'12'%20x2%3D'45'%20y2%3D'19'%2F%3E%3Cline%20x1%3D'19'%20y1%3D'45'%20x2%3D'12'%20y2%3D'52'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E"
+    },
+    "n2": {
+      "id": "n2",
+      "text": "Health",
+      "parentId": "n1",
+      "x": -167,
+      "y": -199,
+      "color": "#2f9e44",
+      "image": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2064%2064'%3E%3Cpath%20d%3D'M52%2012%20C%2020%2014%2012%2040%2014%2052%20C%2026%2054%2052%2046%2052%2012%20Z'%20fill%3D'%232f9e44'%2F%3E%3Cpath%20d%3D'M20%2048%20Q%2034%2030%2048%2018'%20stroke%3D'%2316361b'%20stroke-width%3D'2.5'%20fill%3D'none'%2F%3E%3C%2Fsvg%3E"
+    },
+    "n3": {
+      "id": "n3",
+      "text": "Exercise",
+      "parentId": "n2",
+      "x": -419,
+      "y": -272,
+      "color": null,
+      "image": null
+    },
+    "n4": {
+      "id": "n4",
+      "text": "Sleep",
+      "parentId": "n2",
+      "x": -321,
+      "y": -383,
+      "color": null,
+      "image": null
+    },
+    "n5": {
+      "id": "n5",
+      "text": "Nutrition",
+      "parentId": "n2",
+      "x": -195,
+      "y": -460,
+      "color": null,
+      "image": null
+    },
+    "n6": {
+      "id": "n6",
+      "text": "Learning",
+      "parentId": "n1",
+      "x": -260,
+      "y": 0,
+      "color": "#7048e8",
+      "image": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2064%2064'%3E%3Cpath%20d%3D'M11%2014%20H31%20a3%203%200%200%201%203%203%20V52%20H14%20a3%203%200%200%201-3-3%20Z'%20fill%3D'%237048e8'%2F%3E%3Cpath%20d%3D'M53%2014%20H33%20a3%203%200%200%200-3%203%20V52%20H50%20a3%203%200%200%200%203-3%20Z'%20fill%3D'%239477f2'%2F%3E%3C%2Fsvg%3E"
+    },
+    "n7": {
+      "id": "n7",
+      "text": "Reading",
+      "parentId": "n6",
+      "x": -478,
+      "y": 146,
+      "color": null,
+      "image": null
+    },
+    "n8": {
+      "id": "n8",
+      "text": "Courses",
+      "parentId": "n6",
+      "x": -500,
+      "y": 0,
+      "color": null,
+      "image": null
+    },
+    "n9": {
+      "id": "n9",
+      "text": "Skills",
+      "parentId": "n6",
+      "x": -478,
+      "y": -146,
+      "color": null,
+      "image": null
+    },
+    "n10": {
+      "id": "n10",
+      "text": "Family",
+      "parentId": "n1",
+      "x": -225,
+      "y": 130,
+      "color": "#0c8599",
+      "image": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2064%2064'%3E%3Cpath%20d%3D'M32%2054%20C%206%2037%209%2016%2024%2016%20C%2031%2016%2032%2023%2032%2023%20C%2032%2023%2033%2016%2040%2016%20C%2055%2016%2058%2037%2032%2054%20Z'%20fill%3D'%230c8599'%2F%3E%3C%2Fsvg%3E"
+    },
+    "n11": {
+      "id": "n11",
+      "text": "Friends",
+      "parentId": "n10",
+      "x": -341,
+      "y": 366,
+      "color": null,
+      "image": null
+    },
+    "n12": {
+      "id": "n12",
+      "text": "Home",
+      "parentId": "n10",
+      "x": -433,
+      "y": 250,
+      "color": null,
+      "image": null
+    },
+    "n13": {
+      "id": "n13",
+      "text": "Pets",
+      "parentId": "n10",
+      "x": -487,
+      "y": 112,
+      "color": null,
+      "image": null
+    },
+    "n14": {
+      "id": "n14",
+      "text": "Travel",
+      "parentId": "n1",
+      "x": 167,
+      "y": -199,
+      "color": "#e08a16",
+      "image": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2064%2064'%3E%3Cpath%20d%3D'M5%2030%20L59%207%20L41%2057%20L31%2039%20Z'%20fill%3D'%23e08a16'%2F%3E%3Cpath%20d%3D'M31%2039%20L59%207'%20stroke%3D'%239c5e0d'%20stroke-width%3D'2'%20fill%3D'none'%2F%3E%3C%2Fsvg%3E"
+    },
+    "n15": {
+      "id": "n15",
+      "text": "Beach",
+      "parentId": "n14",
+      "x": 195,
+      "y": -460,
+      "color": null,
+      "image": null
+    },
+    "n16": {
+      "id": "n16",
+      "text": "Mountains",
+      "parentId": "n14",
+      "x": 321,
+      "y": -383,
+      "color": null,
+      "image": null
+    },
+    "n17": {
+      "id": "n17",
+      "text": "Cities",
+      "parentId": "n14",
+      "x": 419,
+      "y": -272,
+      "color": null,
+      "image": null
+    },
+    "n18": {
+      "id": "n18",
+      "text": "Work",
+      "parentId": "n1",
+      "x": 260,
+      "y": 0,
+      "color": "#1c7ed6",
+      "image": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2064%2064'%3E%3Crect%20x%3D'10'%20y%3D'22'%20width%3D'44'%20height%3D'30'%20rx%3D'4'%20fill%3D'%231c7ed6'%2F%3E%3Crect%20x%3D'24'%20y%3D'13'%20width%3D'16'%20height%3D'11'%20rx%3D'3'%20fill%3D'none'%20stroke%3D'%231c7ed6'%20stroke-width%3D'4'%2F%3E%3Crect%20x%3D'10'%20y%3D'31'%20width%3D'44'%20height%3D'4'%20fill%3D'%2312568f'%2F%3E%3C%2Fsvg%3E"
+    },
+    "n19": {
+      "id": "n19",
+      "text": "Goals",
+      "parentId": "n18",
+      "x": 478,
+      "y": -146,
+      "color": null,
+      "image": null
+    },
+    "n20": {
+      "id": "n20",
+      "text": "Projects",
+      "parentId": "n18",
+      "x": 500,
+      "y": 0,
+      "color": null,
+      "image": null
+    },
+    "n21": {
+      "id": "n21",
+      "text": "Focus",
+      "parentId": "n18",
+      "x": 478,
+      "y": 146,
+      "color": null,
+      "image": null
+    },
+    "n22": {
+      "id": "n22",
+      "text": "Creativity",
+      "parentId": "n1",
+      "x": 167,
+      "y": 199,
+      "color": "#c2255c",
+      "image": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2064%2064'%3E%3Cg%20fill%3D'%23c2255c'%3E%3Crect%20x%3D'39'%20y%3D'9'%20width%3D'6'%20height%3D'35'%20rx%3D'2'%2F%3E%3Cellipse%20cx%3D'33'%20cy%3D'45'%20rx%3D'10'%20ry%3D'8'%2F%3E%3Cpath%20d%3D'M39%209%20L53%2014%20V25%20L39%2020%20Z'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E"
+    },
+    "n23": {
+      "id": "n23",
+      "text": "Music",
+      "parentId": "n22",
+      "x": 419,
+      "y": 272,
+      "color": null,
+      "image": null
+    },
+    "n24": {
+      "id": "n24",
+      "text": "Art",
+      "parentId": "n22",
+      "x": 321,
+      "y": 383,
+      "color": null,
+      "image": null
+    },
+    "n25": {
+      "id": "n25",
+      "text": "Writing",
+      "parentId": "n22",
+      "x": 195,
+      "y": 460,
+      "color": null,
+      "image": null
+    }
+  },
+  "rootId": "n1",
+  "nextId": 26
+}
