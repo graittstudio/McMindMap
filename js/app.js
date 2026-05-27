@@ -22,7 +22,8 @@ let selectedId = null;
 let cam = { x: 0, y: 0, scale: 1 };
 let nextId = 1;
 
-let rootSize = { rx: 70, ry: 48 };
+let rootSize = { rx: 70, ry: 48 };     // bounds (ellipse / image + title) for fit
+let rootAttach = { rx: 70, ry: 48 };   // where branches attach (just inside a central image)
 const labelWorld = {};     // id -> {x,y} anchor used by the inline editor
 
 function newNode(text, parentId, x, y, color) {
@@ -198,11 +199,13 @@ function branchPath(p0, p1, w0, w1) {
 function widthForDepth(d) { return Math.max(4, 20 - d * 5); }
 function fontForDepth(d) { return Math.max(12, 18 - (d - 1) * 2); }
 
-// Where a child branch starts on its parent.
+// Where a child branch starts on its parent. For the root it starts on the
+// `rootAttach` ellipse — for a central image that ellipse sits just inside the
+// picture so branches emerge from under it (no gap/frame around the image).
 function attachStart(parent, child) {
   if (parent.parentId) return { x: parent.x, y: parent.y };  // chain tip-to-tip
   const ang = Math.atan2(child.y - parent.y, child.x - parent.x);
-  return { x: parent.x + Math.cos(ang) * rootSize.rx, y: parent.y + Math.sin(ang) * rootSize.ry };
+  return { x: parent.x + Math.cos(ang) * rootAttach.rx, y: parent.y + Math.sin(ang) * rootAttach.ry };
 }
 
 // ---- Rendering ------------------------------------------------------------
@@ -260,27 +263,31 @@ function drawRoot(node) {
   const bb = text.getBBox();
 
   if (node.image) {
-    // Central image IS the node; title sits just below it and branches attach
-    // around the node point so they meet the image seamlessly.
-    const iw = 180, ih = 130;
-    rootSize = { rx: Math.max(iw / 2, bb.width / 2 + 10), ry: ih / 2 + bb.height + 6 };
+    // Central image IS the node: drawn centred on the node point, the title
+    // just below it. Branches attach on a small ellipse INSIDE the image, so
+    // they emerge from under the picture instead of from a frame around it.
+    const iw = 170, ih = 130;
     const img = document.createElementNS(SVG_NS, "image");
     img.setAttributeNS("http://www.w3.org/1999/xlink", "href", node.image);
     img.setAttribute("href", node.image);
     img.setAttribute("x", node.x - iw / 2);
-    img.setAttribute("y", node.y - ih / 2 - bb.height / 2);
+    img.setAttribute("y", node.y - ih / 2);
     img.setAttribute("width", iw);
     img.setAttribute("height", ih);
     img.setAttribute("preserveAspectRatio", "xMidYMid meet");
     img.dataset.id = node.id;
-    g.insertBefore(img, text);
-    text.setAttribute("y", node.y + ih / 2 - bb.height / 2 + 6);   // title below image
-    labelWorld[node.id] = { x: node.x, y: parseFloat(text.getAttribute("y")) };
+    g.insertBefore(img, text);                                     // image behind the title
+    const titleY = node.y + ih / 2 + bb.height * 0.55;
+    text.setAttribute("y", titleY);
+    rootAttach = { rx: iw * 0.34, ry: ih * 0.34 };                 // branches start under the image
+    rootSize = { rx: iw / 2, ry: (titleY - node.y) + bb.height / 2 + 6 };
+    labelWorld[node.id] = { x: node.x, y: titleY };
     return;
   }
 
   const ell = document.createElementNS(SVG_NS, "ellipse");
   rootSize = { rx: Math.max(64, bb.width / 2 + 30), ry: Math.max(40, bb.height / 2 + 22) };
+  rootAttach = rootSize;
   ell.setAttribute("cx", node.x);
   ell.setAttribute("cy", node.y);
   ell.setAttribute("rx", rootSize.rx);
