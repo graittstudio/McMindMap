@@ -33,7 +33,11 @@ lint:
 
 deploy:
   stage: deploy
-  needs: []
+  # Wait for lint to pass. Previously `needs: []` made deploy a DAG
+  # root, which let it run *in parallel* with lint on main -- a failing
+  # lint would not stop the deploy. needs: [lint] re-establishes the
+  # implicit stage-order guarantee explicitly.
+  needs: [lint]
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
   script:
