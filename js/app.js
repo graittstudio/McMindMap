@@ -411,12 +411,15 @@ function addBtn(x, y, id, action, color, filled) {
 
 function drawHandle(node, color) {
   // Larger transparent hit area + a visible dot, so it is easy to grab.
+  // The hit-circle gets ONLY .handle-hit (no .handle) so it doesn't inherit
+  // the visible white stroke -- otherwise every node draws a 26px ring.
   const hit = document.createElementNS(SVG_NS, "circle");
-  hit.setAttribute("class", "handle handle-hit");
+  hit.setAttribute("class", "handle-hit");
   hit.setAttribute("cx", node.x);
   hit.setAttribute("cy", node.y);
   hit.setAttribute("r", 13);
   hit.setAttribute("fill", "transparent");
+  hit.setAttribute("stroke", "none");
   hit.dataset.id = node.id;
   gNodes.appendChild(hit);
 
@@ -602,7 +605,7 @@ svg.addEventListener("pointerdown", (e) => {
     else addChild(addEl.dataset.id);
     return;
   }
-  const handle = e.target.closest(".handle");          // ONLY handles start a drag
+  const handle = e.target.closest(".handle, .handle-hit"); // hit-area OR visible dot
   const idEl = e.target.closest("[data-id]");
   const world = screenToWorld(e.clientX, e.clientY);
   if (handle) {
