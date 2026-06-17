@@ -152,6 +152,13 @@ button:disabled { opacity: .6; cursor: default; }
   width: auto;
 }
 .linkish:hover { text-decoration: underline; filter: none; }
+.links-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: -2px;
+}
+.links-row .linkish { margin: 0; padding: 4px 0; }
 .msg {
   margin: 2px 0 0;
   min-height: 18px;

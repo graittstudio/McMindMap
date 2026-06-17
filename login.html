@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#b8860b" />
   <link rel="icon" type="image/svg+xml" href="icon.svg?v=29" />
   <link rel="apple-touch-icon" href="icon.png?v=29" />
-  <link rel="stylesheet" href="css/auth.css?v=5" />
+  <link rel="stylesheet" href="css/auth.css?v=6" />
   <script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
 </head>
 <body>
@@ -28,7 +28,7 @@
 
     <!-- Sign-in -->
     <form id="login-form" autocomplete="on">
-      <label>Username
+      <label>Username or email
         <input id="username" name="username" type="text" autocomplete="username" required autofocus />
       </label>
       <label>Password
@@ -37,18 +37,35 @@
       <label class="show-pw"><input type="checkbox" id="login-show" /> Show password</label>
       <button type="submit" id="login-btn">Sign in</button>
       <p class="msg" id="login-msg"></p>
-      <button type="button" id="forgot-link" class="linkish">New account · Forgot password?</button>
+      <div class="links-row">
+        <button type="button" id="forgot-link" class="linkish">Forgot password?</button>
+        <button type="button" id="signup-link" class="linkish">Create account</button>
+      </div>
     </form>
 
-    <!-- Request a reset link / sign-up -->
+    <!-- Request a reset link -->
     <form id="reset-request-form" hidden>
-      <p class="notice">Enter your email. If you already have an account we'll send a password reset link — otherwise we'll create one and send you a setup link.</p>
-      <label>Email
-        <input id="reset-login" type="email" autocomplete="email" required autofocus />
+      <p class="notice">Enter your username or email and we'll send you a link to reset your password.</p>
+      <label>Email or username
+        <input id="reset-login" type="text" autocomplete="username" required autofocus />
       </label>
-      <button type="submit" id="reset-request-btn">Send link</button>
+      <button type="submit" id="reset-request-btn">Send reset link</button>
       <p class="msg" id="reset-request-msg"></p>
       <button type="button" id="back-to-login" class="linkish">Back to sign in</button>
+    </form>
+
+    <!-- Sign up -->
+    <form id="signup-form" hidden autocomplete="on">
+      <p class="notice">We'll email you a link to set your password.</p>
+      <label>Your name
+        <input id="signup-name" type="text" autocomplete="name" required autofocus />
+      </label>
+      <label>Email
+        <input id="signup-email" type="email" autocomplete="email" required />
+      </label>
+      <button type="submit" id="signup-btn">Create account</button>
+      <p class="msg" id="signup-msg"></p>
+      <button type="button" id="signup-back" class="linkish">Back to sign in</button>
     </form>
 
     <!-- Forced password change -->
@@ -66,6 +83,6 @@
     </form>
   </main>
 
-  <script src="js/auth.js?v=5"></script>
+  <script src="js/auth.js?v=6"></script>
 </body>
 </html>
