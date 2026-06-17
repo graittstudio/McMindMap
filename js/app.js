@@ -20,6 +20,7 @@ const editor = $("editor");
 let state = null;          // { nodes: {id:node}, rootId }
 let selectedId = null;
 let readOnly = false;       // shared-with-me view: block all edit operations
+let imageEditId = null;     // node whose image is in edit-mode (controls visible)
 let cam = { x: 0, y: 0, scale: 1 };
 let nextId = 1;
 
@@ -374,9 +375,9 @@ function drawImage(node) {
   img.setAttribute("height", ih);
   img.setAttribute("preserveAspectRatio", "xMidYMid meet");
   img.dataset.id = node.id;
-  img.setAttribute("class", "node-image" + (node.id === selectedId ? " selected" : ""));
+  img.setAttribute("class", "node-image" + (node.id === imageEditId ? " selected" : ""));
   gNodes.appendChild(img);
-  if (node.id === selectedId && !readOnly) drawImageControls(node, cx, cy, iw, ih);
+  if (node.id === imageEditId && !readOnly) drawImageControls(node, cx, cy, iw, ih);
 }
 
 // Small resize-handle (bottom-right) and delete-button (top-right) on top
@@ -686,8 +687,8 @@ svg.addEventListener("pointerdown", (e) => {
     else addChild(addEl.dataset.id);
     return;
   }
-  // Image controls (only rendered for the SELECTED node, so the node is
-  // implicitly the right one). Delete is a click; resize starts a drag.
+  // Image controls (only rendered when imageEditId === node.id). Delete is a
+  // click; resize starts a drag. Either keeps image-edit-mode alive.
   const imgCtl = e.target.closest(".image-handle");
   if (imgCtl) {
     e.preventDefault();
@@ -707,14 +708,23 @@ svg.addEventListener("pointerdown", (e) => {
   const imageEl = e.target.closest(".node-image");
   const idEl = e.target.closest("[data-id]");
   const world = screenToWorld(e.clientX, e.clientY);
-  // An already-selected image becomes its own drag target so the picture
-  // can be repositioned independently of the node it belongs to.
-  if (imageEl && imageEl.dataset.id === selectedId && !readOnly) {
-    drag = { kind: "image-move", id: imageEl.dataset.id, startSX: e.clientX, startSY: e.clientY,
-             lastX: world.x, lastY: world.y, moved: false };
-    try { svg.setPointerCapture(e.pointerId); } catch (_) {}
+  // Image: first tap enters edit-mode (controls + outline); a second tap on
+  // the already-active image starts a move-drag. Any pointerdown elsewhere
+  // exits edit-mode -- handled in the else-branches below.
+  if (imageEl && !readOnly) {
+    const id = imageEl.dataset.id;
+    if (imageEditId === id) {
+      drag = { kind: "image-move", id, startSX: e.clientX, startSY: e.clientY,
+               lastX: world.x, lastY: world.y, moved: false };
+      try { svg.setPointerCapture(e.pointerId); } catch (_) {}
+    } else {
+      select(id);
+      imageEditId = id;
+      render();
+    }
     return;
   }
+  if (imageEditId) { imageEditId = null; render(); }   // any other tap leaves edit-mode
   if (handle) {
     select(handle.dataset.id);
     if (readOnly) return;                              // viewer: select-only, no drag
@@ -792,6 +802,10 @@ svg.addEventListener("wheel", (e) => {
 window.addEventListener("keydown", (e) => {
   if (editingId != null) return;
   if ((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z")) { e.preventDefault(); undo(); return; }
+  if (e.key === "Escape") {
+    if (imageEditId || selectedId) { imageEditId = null; select(null); render(); e.preventDefault(); }
+    return;
+  }
   if (e.key === "Tab") { e.preventDefault(); if (selectedId) addChild(selectedId); }
   else if (e.key === "Enter") { e.preventDefault(); if (selectedId) addSibling(selectedId); }
   else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); if (selectedId) removeSubtree(selectedId); }
