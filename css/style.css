@@ -252,8 +252,9 @@ body[data-theme="dark"] .branch-text { stroke: rgba(20,22,26,.85); fill: #f0f0f2
 }
 .label.selected .branch-text { text-decoration: underline; }
 
-.handle { stroke: #fff; stroke-width: 2; cursor: grab; opacity: 0; transition: opacity .12s; pointer-events: none; }
-.handle.dragging { opacity: 1; }
+.handle { stroke: #fff; stroke-width: 2; cursor: grab; opacity: .9; }
+.handle:hover { opacity: 1; }
+.handle.dragging { stroke: var(--selected); stroke-width: 3.5; opacity: 1; }
 
 .node-image { cursor: pointer; }
 
