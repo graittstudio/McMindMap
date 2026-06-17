@@ -137,6 +137,17 @@ describe('sharing', function () {
         eq(count($r['data']['shared']), 1);
         eq((int)$r['data']['shared'][0]['id'], $mapId);
     });
+    it('re-claiming is idempotent (no duplicate row, owner not re-notified)', function () use ($mapId) {
+        // hitting the endpoint again should still 200 without inserting a
+        // second share_claims row. The mail-to-owner branch only fires on
+        // a fresh insert, so a re-claim stays quiet.
+        $r = api('POST', 'share_claim', ['token' => $GLOBALS['_token']]);
+        eq($r['code'], 200);
+        $pdo = new PDO('sqlite:' . getenv('MCMINDMAP_DB'));
+        $stm = $pdo->prepare('SELECT COUNT(*) FROM share_claims c JOIN map_shares s ON s.id = c.share_id WHERE s.map_id = ?');
+        $stm->execute([$mapId]);
+        eq((int)$stm->fetchColumn(), 1, 'one claim row, not two');
+    });
     it('bob has read access and save_map is blocked', function () use ($mapId) {
         $r = api('GET', "map&id=$mapId");
         eq($r['data']['map']['access'], 'read');
