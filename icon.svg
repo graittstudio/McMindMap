@@ -1,0 +1,45 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" fill="#f3e6c4"/>
+  <g fill="none" stroke-linecap="round" stroke-width="40">
+    <path d="M256 256 C 184 256 168 145 95 145" stroke="#1f8acf"/>
+    <path d="M256 256 C 184 256 168 367 95 367" stroke="#3a9b4d"/>
+    <path d="M256 256 C 328 256 344 145 390 145" stroke="#d94235"/>
+    <path d="M256 256 C 328 256 344 367 390 367" stroke="#d68515"/>
+  </g>
+  <g fill="none" stroke-linecap="round" stroke-width="18">
+    <path d="M344 184 C 380 184 415 120 440 90" stroke="#d94235"/>
+    <path d="M344 184 C 380 184 425 215 440 220" stroke="#d94235"/>
+  </g>
+  <g fill="#3a2a08">
+    <ellipse cx="256" cy="256" rx="76" ry="56"/>
+    <circle cx="256" cy="215" r="40"/>
+    <circle cx="208" cy="245" r="38"/>
+    <circle cx="304" cy="245" r="38"/>
+    <circle cx="215" cy="290" r="34"/>
+    <circle cx="297" cy="290" r="34"/>
+  </g>
+  <g fill="#ffffff">
+    <ellipse cx="256" cy="256" rx="70" ry="50"/>
+    <circle cx="256" cy="215" r="34"/>
+    <circle cx="208" cy="245" r="32"/>
+    <circle cx="304" cy="245" r="32"/>
+    <circle cx="215" cy="290" r="28"/>
+    <circle cx="297" cy="290" r="28"/>
+  </g>
+  <g>
+    <circle cx="95" cy="145" r="30" fill="#ffffff" stroke="#1f8acf" stroke-width="6"/>
+    <circle cx="95" cy="145" r="9" fill="#1f8acf"/>
+    <circle cx="390" cy="145" r="30" fill="#ffffff" stroke="#d94235" stroke-width="6"/>
+    <circle cx="390" cy="145" r="9" fill="#d94235"/>
+    <circle cx="95" cy="367" r="30" fill="#ffffff" stroke="#3a9b4d" stroke-width="6"/>
+    <circle cx="95" cy="367" r="9" fill="#3a9b4d"/>
+    <circle cx="390" cy="367" r="30" fill="#ffffff" stroke="#d68515" stroke-width="6"/>
+    <circle cx="390" cy="367" r="9" fill="#d68515"/>
+  </g>
+  <g>
+    <circle cx="440" cy="90" r="18" fill="#ffffff" stroke="#d94235" stroke-width="5"/>
+    <circle cx="440" cy="90" r="6" fill="#d94235"/>
+    <circle cx="440" cy="220" r="18" fill="#ffffff" stroke="#d94235" stroke-width="5"/>
+    <circle cx="440" cy="220" r="6" fill="#d94235"/>
+  </g>
+</svg>
