@@ -6,7 +6,7 @@
 // `$`, which would be a fatal redeclaration SyntaxError otherwise).
 (function () {
 
-const APP_VERSION = "v26 · 2026-06-17";
+const APP_VERSION = "v27 · 2026-06-17";
 const API = "api/index.php";
 const $ = (id) => document.getElementById(id);
 
