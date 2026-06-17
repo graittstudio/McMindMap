@@ -338,8 +338,7 @@ function drawLabel(node, start, end, color, depth) {
   text.setAttribute("font-size", fs);
   text.setAttribute("fill", darken(color, 0.45));
   text.style.textAnchor = anchor;                  // inline style beats the .branch-text CSS
-  const imgClearance = node.image ? 90 / 2 + 8 : 0; // lift past the centred image (ih=90)
-  text.setAttribute("dy", -(half + 5 + imgClearance)); // float just above the branch/image
+  text.setAttribute("dy", -(half + 5));            // float just above the branch
   const tp = document.createElementNS(SVG_NS, "textPath");
   tp.setAttributeNS("http://www.w3.org/1999/xlink", "href", "#" + pathId);
   tp.setAttribute("href", "#" + pathId);
@@ -357,18 +356,59 @@ function drawLabel(node, start, end, color, depth) {
 // branch (which ends there) and any child branches (which start there) connect
 // seamlessly underneath it, rather than dangling as a separate icon.
 function drawImage(node) {
-  const iw = 120, ih = 90;
+  const baseW = 120, baseH = 90;
+  const s   = node.imageScale  || 1;
+  const iw  = baseW * s, ih = baseH * s;
+  // Default placement: image sits ABOVE the branch tip with a small gap, so
+  // the label stays on the branch and the picture floats above it. Once the
+  // user drags the image, that offset overrides the default for that node.
+  const ox  = (node.imageOffsetX != null) ? node.imageOffsetX : 0;
+  const oy  = (node.imageOffsetY != null) ? node.imageOffsetY : -(ih / 2 + 22);
+  const cx  = node.x + ox, cy = node.y + oy;
   const img = document.createElementNS(SVG_NS, "image");
   img.setAttribute("href", node.image);
   img.setAttributeNS("http://www.w3.org/1999/xlink", "href", node.image);
-  img.setAttribute("x", node.x - iw / 2);
-  img.setAttribute("y", node.y - ih / 2);
+  img.setAttribute("x", cx - iw / 2);
+  img.setAttribute("y", cy - ih / 2);
   img.setAttribute("width", iw);
   img.setAttribute("height", ih);
   img.setAttribute("preserveAspectRatio", "xMidYMid meet");
   img.dataset.id = node.id;
   img.setAttribute("class", "node-image" + (node.id === selectedId ? " selected" : ""));
   gNodes.appendChild(img);
+  if (node.id === selectedId && !readOnly) drawImageControls(node, cx, cy, iw, ih);
+}
+
+// Small resize-handle (bottom-right) and delete-button (top-right) on top
+// of the selected node's image. Both have a 1-class dataset.action so the
+// pointerdown router can dispatch by action without further lookups.
+function drawImageControls(node, cx, cy, iw, ih) {
+  const r = 10;
+  const rx = cx + iw / 2, ry = cy + ih / 2;
+  const dx = cx + iw / 2, dy = cy - ih / 2;
+
+  const resize = document.createElementNS(SVG_NS, "rect");
+  resize.setAttribute("x", rx - r); resize.setAttribute("y", ry - r);
+  resize.setAttribute("width", r * 2); resize.setAttribute("height", r * 2);
+  resize.setAttribute("rx", 3);
+  resize.setAttribute("class", "image-handle image-resize");
+  resize.dataset.id = node.id;
+  resize.dataset.action = "image-resize";
+  gNodes.appendChild(resize);
+
+  const del = document.createElementNS(SVG_NS, "circle");
+  del.setAttribute("cx", dx); del.setAttribute("cy", dy);
+  del.setAttribute("r", r);
+  del.setAttribute("class", "image-handle image-delete");
+  del.dataset.id = node.id;
+  del.dataset.action = "image-delete";
+  gNodes.appendChild(del);
+
+  const cross = document.createElementNS(SVG_NS, "text");
+  cross.setAttribute("x", dx); cross.setAttribute("y", dy + 1);
+  cross.setAttribute("class", "image-delete-x");
+  cross.textContent = "✕";
+  gNodes.appendChild(cross);
 }
 
 // Inline "+" affordances on the selected node: add a child branch (outward
@@ -551,7 +591,39 @@ function attachImage(id, dataUrl) {
   if (readOnly) return;
   const n = state.nodes[id];
   if (!n) return;
-  n.image = dataUrl; save(); render();
+  n.image = dataUrl;
+  // Fresh attach -> reset offset/scale so the picture lands in the default
+  // "above the branch tip" spot regardless of what was there before.
+  delete n.imageScale; delete n.imageOffsetX; delete n.imageOffsetY;
+  save(); render();
+}
+
+function deleteImage(id) {
+  if (readOnly) return;
+  const n = state.nodes[id];
+  if (!n || !n.image) return;
+  delete n.image;
+  delete n.imageScale; delete n.imageOffsetX; delete n.imageOffsetY;
+  save(); render();
+}
+
+function moveImage(id, dx, dy) {
+  if (readOnly) return;
+  const n = state.nodes[id];
+  if (!n || !n.image) return;
+  const baseH = 90, ih = baseH * (n.imageScale || 1);
+  const ox = (n.imageOffsetX != null) ? n.imageOffsetX : 0;
+  const oy = (n.imageOffsetY != null) ? n.imageOffsetY : -(ih / 2 + 22);
+  n.imageOffsetX = ox + dx;
+  n.imageOffsetY = oy + dy;
+}
+
+function resizeImage(id, factor) {
+  if (readOnly) return;
+  const n = state.nodes[id];
+  if (!n || !n.image) return;
+  const next = Math.max(0.4, Math.min(3.5, (n.imageScale || 1) * factor));
+  n.imageScale = next;
 }
 
 // ---- Inline editor --------------------------------------------------------
@@ -597,7 +669,7 @@ let drag = null;
 function endDrag(e) {
   if (drag) {
     if (drag.pan && !drag.moved) select(null);   // tap on empty canvas = deselect
-    else if (!drag.pan && drag.moved) save();
+    else if (drag.moved && !drag.pan) save();    // node-drag / image-drag / image-resize committed
     svg.classList.remove("panning");
   }
   document.querySelectorAll(".handle.dragging").forEach((el) => el.classList.remove("dragging"));
@@ -614,9 +686,35 @@ svg.addEventListener("pointerdown", (e) => {
     else addChild(addEl.dataset.id);
     return;
   }
+  // Image controls (only rendered for the SELECTED node, so the node is
+  // implicitly the right one). Delete is a click; resize starts a drag.
+  const imgCtl = e.target.closest(".image-handle");
+  if (imgCtl) {
+    e.preventDefault();
+    const id = imgCtl.dataset.id;
+    if (imgCtl.dataset.action === "image-delete") { deleteImage(id); return; }
+    if (imgCtl.dataset.action === "image-resize") {
+      if (readOnly) return;
+      const world = screenToWorld(e.clientX, e.clientY);
+      drag = { kind: "image-resize", id, startSX: e.clientX, startSY: e.clientY,
+               startDist: Math.hypot(world.x - state.nodes[id].x, world.y - state.nodes[id].y) || 1,
+               startScale: state.nodes[id].imageScale || 1, moved: false };
+      try { svg.setPointerCapture(e.pointerId); } catch (_) {}
+      return;
+    }
+  }
   const handle = e.target.closest(".handle, .handle-hit"); // hit-area OR visible dot
+  const imageEl = e.target.closest(".node-image");
   const idEl = e.target.closest("[data-id]");
   const world = screenToWorld(e.clientX, e.clientY);
+  // An already-selected image becomes its own drag target so the picture
+  // can be repositioned independently of the node it belongs to.
+  if (imageEl && imageEl.dataset.id === selectedId && !readOnly) {
+    drag = { kind: "image-move", id: imageEl.dataset.id, startSX: e.clientX, startSY: e.clientY,
+             lastX: world.x, lastY: world.y, moved: false };
+    try { svg.setPointerCapture(e.pointerId); } catch (_) {}
+    return;
+  }
   if (handle) {
     select(handle.dataset.id);
     if (readOnly) return;                              // viewer: select-only, no drag
@@ -648,9 +746,19 @@ svg.addEventListener("pointermove", (e) => {
     drag.moved = true;   // cross threshold, then track the cursor from the grab point
   }
   const world = screenToWorld(e.clientX, e.clientY);
+  if (drag.kind === "image-resize") {
+    const node = state.nodes[drag.id]; if (!node) return;
+    const dist = Math.hypot(world.x - node.x, world.y - node.y) || 1;
+    node.imageScale = Math.max(0.4, Math.min(3.5, drag.startScale * (dist / drag.startDist)));
+    render(); return;
+  }
   const dx = world.x - drag.lastX, dy = world.y - drag.lastY;
   if (Math.abs(dx) > 4000 || Math.abs(dy) > 4000) return; // reject an implausible jump
-  dragNode(drag.id, dx, dy);
+  if (drag.kind === "image-move") {
+    moveImage(drag.id, dx, dy);
+  } else {
+    dragNode(drag.id, dx, dy);
+  }
   drag.lastX = world.x; drag.lastY = world.y;
   render();
 });
