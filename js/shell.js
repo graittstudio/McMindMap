@@ -6,7 +6,7 @@
 // `$`, which would be a fatal redeclaration SyntaxError otherwise).
 (function () {
 
-const APP_VERSION = "v36 · 2026-06-17";
+const APP_VERSION = "v37 · 2026-06-17";
 const API = "api/index.php";
 const $ = (id) => document.getElementById(id);
 
@@ -110,6 +110,9 @@ function applyAccess(ownerName) {
     banner.hidden = true;
   }
   $("map-title").style.cursor = (currentAccess === "owner") ? "" : "default";
+  // Share button: only the owner gets it -- a writer/viewer can't share on
+  // somebody else's behalf.
+  $("btn-share").hidden = (currentAccess !== "owner");
 }
 
 async function newMap() {
@@ -357,6 +360,10 @@ function wireChrome() {
   $("btn-maps").addEventListener("click", openDrawer);
   $("drawer-close").addEventListener("click", closeDrawer);
   $("btn-new-map").addEventListener("click", newMap);
+  $("btn-share").addEventListener("click", () => {
+    if (currentAccess !== "owner" || !currentMapId) return;
+    openShareModal(currentMapId, currentTitle);
+  });
   $("overlay").addEventListener("click", closeAll);
 
   $("map-title").addEventListener("click", () => {
