@@ -76,7 +76,7 @@ $("reset-request-form").addEventListener("submit", async (e) => {
     await api("request_reset", { body: { login: $("reset-login").value } });
   } catch (err) { /* never reveal errors here */ }
   msg.classList.add("ok");
-  msg.textContent = "If that account exists, a reset link has been emailed. Check your inbox.";
+  msg.textContent = "Check your inbox — your link is on the way.";
   btn.disabled = true;
 });
 $("change-show").addEventListener("change", (e) => {
