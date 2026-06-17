@@ -6,9 +6,9 @@
   <title>McMindMap</title>
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#b8860b" />
-  <link rel="icon" type="image/svg+xml" href="icon.svg?v=34" />
-  <link rel="apple-touch-icon" href="icon.png?v=34" />
-  <link rel="stylesheet" href="css/style.css?v=34" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg?v=35" />
+  <link rel="apple-touch-icon" href="icon.png?v=35" />
+  <link rel="stylesheet" href="css/style.css?v=35" />
   <script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
   <script>window.__MCM_DEFER_BOOT__ = true;</script>
 </head>
@@ -124,10 +124,44 @@
     </div>
   </div>
 
+  <!-- Share modal -->
+  <div id="share-modal" class="modal" hidden>
+    <div class="dialog">
+      <header><h2>Share this mindmap</h2><button class="icon close">✕</button></header>
+      <p class="notice">Anyone with this link can open the mindmap after signing in.</p>
+      <label>Permission for new accepters
+        <select id="share-rights">
+          <option value="read">Can view (read only)</option>
+          <option value="write">Can edit</option>
+        </select>
+      </label>
+      <div class="share-link-row">
+        <input id="share-link-input" type="text" readonly placeholder="No link yet — pick a permission and copy." />
+        <button id="share-copy" class="primary">Copy</button>
+      </div>
+      <div class="share-link-actions">
+        <button id="share-regenerate" class="ghost" type="button">Generate new link</button>
+        <button id="share-revoke" class="ghost" type="button">Stop accepting new people</button>
+      </div>
+      <p class="share-revoked-note" id="share-revoked-note" hidden>Link is revoked — old URLs no longer work for new accepters. People already on the list keep their access.</p>
+      <hr />
+      <h3>Shared with</h3>
+      <ul id="share-claims-list" class="claims-list"></ul>
+      <p class="msg" id="share-msg"></p>
+      <footer>
+        <button class="ghost close" type="button">Close</button>
+      </footer>
+    </div>
+  </div>
+
+  <div id="readonly-banner" class="readonly-banner" hidden>
+    <span>Read-only · shared by <strong id="readonly-owner"></strong></span>
+  </div>
+
   <div id="overlay" hidden></div>
   <div id="app-version" title="App version"></div>
 
-  <script src="js/app.js?v=34"></script>
-  <script src="js/shell.js?v=34"></script>
+  <script src="js/app.js?v=35"></script>
+  <script src="js/shell.js?v=35"></script>
 </body>
 </html>

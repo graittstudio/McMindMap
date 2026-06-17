@@ -26,6 +26,16 @@ function showChangeForm() {
   $("new-pw").focus();
 }
 
+// Where to land after a successful sign-in. If the URL has ?next=PATH we
+// use that path (e.g. coming from share.html); otherwise the editor.
+// Restricted to relative paths so an attacker can't park a foreign URL.
+function nextUrl() {
+  const p = new URLSearchParams(location.search).get("next");
+  if (!p) return "index.html";
+  if (p.startsWith("//") || /^[a-z]+:/i.test(p)) return "index.html";
+  return p;
+}
+
 // If already signed in (and not forced to change), skip straight to the app.
 (async () => {
   try {
@@ -33,7 +43,7 @@ function showChangeForm() {
     if (me.user) {
       csrf = me.csrf || "";
       if (me.user.must_change) showChangeForm();
-      else location.replace("index.html");
+      else location.replace(nextUrl());
     }
   } catch (e) { /* not logged in */ }
 })();
@@ -47,7 +57,7 @@ $("login-form").addEventListener("submit", async (e) => {
     const r = await api("login", { body: { username: $("username").value, password: $("password").value } });
     csrf = r.csrf || "";
     if (r.user.must_change) showChangeForm();
-    else location.replace("index.html");
+    else location.replace(nextUrl());
   } catch (err) {
     msg.textContent = err.message;
     btn.disabled = false;
@@ -123,7 +133,7 @@ $("change-form").addEventListener("submit", async (e) => {
     await api("change_password", { body: { current: "", new: pw } });
     msg.classList.add("ok");
     msg.textContent = "Password updated — entering…";
-    setTimeout(() => location.replace("index.html"), 600);
+    setTimeout(() => location.replace(nextUrl()), 600);
   } catch (err) {
     msg.textContent = err.message;
     btn.disabled = false;

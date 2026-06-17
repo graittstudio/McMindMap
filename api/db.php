@@ -67,4 +67,37 @@ function init_schema(PDO $pdo): void {
         )
     ");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_resets_hash ON password_resets(token_hash)");
+
+    // Per map: ONE share link (the URL the owner copies). active=0 = link
+    // revoked: existing claims keep working, no new claims may be created.
+    // Regenerating the link replaces `token` -- old URLs die, claims survive.
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS map_shares (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            map_id     INTEGER NOT NULL UNIQUE,
+            token      TEXT NOT NULL UNIQUE,
+            rights     TEXT NOT NULL DEFAULT 'read',
+            active     INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (map_id) REFERENCES maps(id) ON DELETE CASCADE
+        )
+    ");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_shares_token ON map_shares(token)");
+
+    // Per accepter: a row created when somebody uses the share link. Rights
+    // are frozen at claim time so changes to the share don't silently
+    // upgrade/downgrade existing accepters.
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS share_claims (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            share_id    INTEGER NOT NULL,
+            user_id     INTEGER NOT NULL,
+            rights      TEXT NOT NULL DEFAULT 'read',
+            accepted_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE (share_id, user_id),
+            FOREIGN KEY (share_id) REFERENCES map_shares(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id)  REFERENCES users(id) ON DELETE CASCADE
+        )
+    ");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_claims_user ON share_claims(user_id)");
 }

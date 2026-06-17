@@ -6,7 +6,7 @@
 // `$`, which would be a fatal redeclaration SyntaxError otherwise).
 (function () {
 
-const APP_VERSION = "v34 · 2026-06-17";
+const APP_VERSION = "v35 · 2026-06-17";
 const API = "api/index.php";
 const $ = (id) => document.getElementById(id);
 
@@ -14,6 +14,8 @@ let user = null;
 let csrf = "";
 let currentMapId = null;
 let currentTitle = "Untitled";
+let currentAccess = "owner";    // 'owner' | 'write' | 'read' for the open map
+let currentShareMapId = null;   // map_id whose Share modal is currently open
 let lastSavedJson = "";
 let saveTimer = null;
 
@@ -55,6 +57,7 @@ function setSaveState(s) {
 }
 
 function scheduleSave() {
+  if (currentAccess === "read") return;   // viewer never persists local edits
   clearTimeout(saveTimer);
   saveTimer = setTimeout(doSave, 900);
 }
@@ -85,11 +88,28 @@ async function loadMap(id) {
   const r = await api(`map&id=${id}`);
   window.MindMap.loadDoc(r.map.data);
   currentMapId = r.map.id;
+  currentAccess = r.map.access || "owner";
   setTitle(r.map.title);
+  applyAccess(r.map.owner_name);
   lastSavedJson = JSON.stringify(window.MindMap.getDoc());
-  setSaveState("saved");
+  setSaveState(currentAccess === "read" ? "" : "saved");
   savePrefs({ lastMapId: id }).catch(() => {});
   closeDrawer();
+}
+
+// Toggle the read-only UI when the open map is shared-with-me (read access).
+// The map-title click-to-rename is owner-only too.
+function applyAccess(ownerName) {
+  const ro = currentAccess === "read";
+  window.MindMap.setReadOnly(ro);
+  const banner = $("readonly-banner");
+  if (ro && ownerName) {
+    $("readonly-owner").textContent = ownerName;
+    banner.hidden = false;
+  } else {
+    banner.hidden = true;
+  }
+  $("map-title").style.cursor = (currentAccess === "owner") ? "" : "default";
 }
 
 async function newMap() {
@@ -108,7 +128,20 @@ async function deleteMap(id, title) {
   await api("delete_map", { body: { id } });
   if (id === currentMapId) {
     const list = await api("maps");
-    if (list.maps.length) await loadMap(list.maps[0].id);
+    const fallback = (list.maps && list.maps[0]) || (list.shared && list.shared[0]) || null;
+    if (fallback) await loadMap(fallback.id);
+    else await newMap();
+  }
+  await refreshMaps();
+}
+
+async function leaveShare(id, title) {
+  if (!confirm(`Leave "${title}"? You can be re-added with a new link.`)) return;
+  await api("share_leave", { body: { map_id: id } });
+  if (id === currentMapId) {
+    const list = await api("maps");
+    const fallback = (list.maps && list.maps[0]) || (list.shared && list.shared[0]) || null;
+    if (fallback) await loadMap(fallback.id);
     else await newMap();
   }
   await refreshMaps();
@@ -118,20 +151,53 @@ async function refreshMaps() {
   const r = await api("maps");
   const ul = $("maps-list");
   ul.innerHTML = "";
-  if (!r.maps.length) { ul.innerHTML = '<li class="empty">No mindmaps yet.</li>'; return; }
-  for (const m of r.maps) {
-    const li = document.createElement("li");
-    if (m.id === currentMapId) li.classList.add("current");
-    const open = document.createElement("button");
-    open.className = "map-open";
-    open.innerHTML = `<span class="t">${escapeHtml(m.title)}</span><span class="d">${m.updated_at}</span>`;
-    open.addEventListener("click", () => loadMap(m.id));
-    const del = document.createElement("button");
-    del.className = "map-del icon"; del.textContent = "🗑"; del.title = "Delete";
-    del.addEventListener("click", (e) => { e.stopPropagation(); deleteMap(m.id, m.title); });
-    li.append(open, del);
-    ul.appendChild(li);
+  const own = r.maps || [], shared = r.shared || [];
+  if (!own.length && !shared.length) {
+    ul.innerHTML = '<li class="empty">No mindmaps yet.</li>'; return;
   }
+  for (const m of own) ul.appendChild(renderOwnItem(m));
+  if (shared.length) {
+    const head = document.createElement("li");
+    head.className = "section-head";
+    head.textContent = "Shared with me";
+    ul.appendChild(head);
+    for (const m of shared) ul.appendChild(renderSharedItem(m));
+  }
+}
+
+function renderOwnItem(m) {
+  const li = document.createElement("li");
+  if (m.id === currentMapId) li.classList.add("current");
+  const open = document.createElement("button");
+  open.className = "map-open";
+  open.innerHTML = `<span class="t">${escapeHtml(m.title)}</span><span class="d">${m.updated_at}</span>`;
+  open.addEventListener("click", () => loadMap(m.id));
+  const share = document.createElement("button");
+  share.className = "map-share icon"; share.textContent = "↗"; share.title = "Share";
+  share.addEventListener("click", (e) => { e.stopPropagation(); openShareModal(m.id, m.title); });
+  const del = document.createElement("button");
+  del.className = "map-del icon"; del.textContent = "🗑"; del.title = "Delete";
+  del.addEventListener("click", (e) => { e.stopPropagation(); deleteMap(m.id, m.title); });
+  li.append(open, share, del);
+  return li;
+}
+
+function renderSharedItem(m) {
+  const li = document.createElement("li");
+  if (m.id === currentMapId) li.classList.add("current");
+  const badge = m.rights === "write"
+    ? '<span class="badge edit">edit</span>'
+    : '<span class="badge view">view</span>';
+  const open = document.createElement("button");
+  open.className = "map-open";
+  open.innerHTML = `<span class="t">${escapeHtml(m.title)}${badge}</span>` +
+                   `<span class="d">by ${escapeHtml(m.owner_name)} · ${m.updated_at}</span>`;
+  open.addEventListener("click", () => loadMap(m.id));
+  const leave = document.createElement("button");
+  leave.className = "map-del icon"; leave.textContent = "✕"; leave.title = "Leave";
+  leave.addEventListener("click", (e) => { e.stopPropagation(); leaveShare(m.id, m.title); });
+  li.append(open, leave);
+  return li;
 }
 
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
@@ -140,8 +206,8 @@ function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&a
 
 function openDrawer() { refreshMaps(); $("maps-drawer").hidden = false; $("overlay").hidden = false; }
 function closeDrawer() { $("maps-drawer").hidden = true; if (allClosed()) $("overlay").hidden = true; }
-function allClosed() { return $("maps-drawer").hidden && $("prefs-modal").hidden && $("admin-modal").hidden; }
-function closeAll() { $("maps-drawer").hidden = $("prefs-modal").hidden = $("admin-modal").hidden = $("overlay").hidden = true; $("user-menu").hidden = true; }
+function allClosed() { return $("maps-drawer").hidden && $("prefs-modal").hidden && $("admin-modal").hidden && $("share-modal").hidden; }
+function closeAll() { $("maps-drawer").hidden = $("prefs-modal").hidden = $("admin-modal").hidden = $("share-modal").hidden = $("overlay").hidden = true; $("user-menu").hidden = true; }
 
 function openPrefs() {
   $("pref-name").value = displayName();
@@ -270,11 +336,17 @@ async function boot() {
   window.MindMap.boot();
   window.MindMap.onChange(scheduleSave);
 
-  // open last map, or most recent, or a fresh one
+  // Open: ?map=N (e.g. landing from share.html), else last opened, else most
+  // recent own map, else first shared map, else a fresh one.
   const list = await api("maps");
+  const all = (list.maps || []).concat(list.shared || []);
+  const fromUrl = parseInt(new URLSearchParams(location.search).get("map") || "0", 10);
   const last = prefs().lastMapId;
-  const target = (last && list.maps.find((m) => m.id === last)) ? last
-               : (list.maps[0] ? list.maps[0].id : null);
+  let target = null;
+  if (fromUrl && all.find((m) => m.id === fromUrl)) target = fromUrl;
+  else if (last && all.find((m) => m.id === last)) target = last;
+  else if (list.maps && list.maps[0]) target = list.maps[0].id;
+  else if (list.shared && list.shared[0]) target = list.shared[0].id;
   if (target) await loadMap(target);
   else await newMap();
 
@@ -288,6 +360,7 @@ function wireChrome() {
   $("overlay").addEventListener("click", closeAll);
 
   $("map-title").addEventListener("click", () => {
+    if (currentAccess !== "owner") return;        // only the owner can rename
     const t = prompt("Mindmap title:", currentTitle);
     if (t == null) return;
     setTitle(t); lastSavedJson = ""; doSave();
@@ -310,7 +383,109 @@ function wireChrome() {
     ["pref-current", "pref-newpw", "pref-newpw2"].forEach((id) => { $(id).type = t; });
   });
   $("nu-add").addEventListener("click", addUser);
+  wireShareModal();
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAll(); });
+}
+
+// ---- Share modal ----------------------------------------------------------
+
+async function openShareModal(mapId, title) {
+  currentShareMapId = mapId;
+  $("share-modal").querySelector("h2").textContent = `Share "${title}"`;
+  $("share-msg").textContent = ""; $("share-msg").className = "msg";
+  await refreshShareState();
+  $("share-modal").hidden = false; $("overlay").hidden = false; $("user-menu").hidden = true;
+}
+
+async function refreshShareState() {
+  const r = await api(`share_state&map_id=${currentShareMapId}`);
+  if (r.share) {
+    $("share-link-input").value = r.share.link;
+    $("share-rights").value = r.share.rights;
+    $("share-revoked-note").hidden = r.share.active;
+    $("share-revoke").textContent = r.share.active ? "Stop accepting new people" : "Reactivate link";
+    $("share-revoke").dataset.action = r.share.active ? "revoke" : "activate";
+  } else {
+    $("share-link-input").value = "";
+    $("share-revoked-note").hidden = true;
+    $("share-revoke").textContent = "Stop accepting new people";
+    $("share-revoke").dataset.action = "revoke";
+  }
+  renderShareClaims(r.claims || []);
+}
+
+async function ensureShareLink() {
+  const rights = $("share-rights").value;
+  const r = await api("share_link", { body: { map_id: currentShareMapId, rights } });
+  $("share-link-input").value = r.link;
+  $("share-rights").value = r.rights;
+  $("share-revoked-note").hidden = r.active;
+  $("share-revoke").textContent = r.active ? "Stop accepting new people" : "Reactivate link";
+  $("share-revoke").dataset.action = r.active ? "revoke" : "activate";
+  return r;
+}
+
+function renderShareClaims(claims) {
+  const ul = $("share-claims-list");
+  ul.innerHTML = "";
+  if (!claims.length) {
+    ul.innerHTML = '<li class="empty">No one yet.</li>'; return;
+  }
+  for (const c of claims) {
+    const li = document.createElement("li");
+    const tier = c.rights === "write" ? "edit" : "view";
+    li.innerHTML = `<span class="claim-name">${escapeHtml(c.name)}</span>` +
+                   `<span class="badge ${tier}">${tier}</span>`;
+    const rev = document.createElement("button");
+    rev.className = "icon"; rev.textContent = "✕"; rev.title = "Revoke access";
+    rev.addEventListener("click", async () => {
+      if (!confirm(`Stop sharing with ${c.name}?`)) return;
+      await api("share_revoke_claim", { body: { claim_id: c.id } });
+      await refreshShareState();
+    });
+    li.appendChild(rev);
+    ul.appendChild(li);
+  }
+}
+
+function wireShareModal() {
+  $("share-copy").addEventListener("click", async () => {
+    try {
+      let link = $("share-link-input").value;
+      if (!link) link = (await ensureShareLink()).link;
+      await navigator.clipboard.writeText(link);
+      flashShare("Link copied to clipboard.", true);
+    } catch (e) { flashShare(e.message, false); }
+  });
+  $("share-rights").addEventListener("change", async () => {
+    try { await ensureShareLink(); flashShare("Permission saved for new accepters.", true); }
+    catch (e) { flashShare(e.message, false); }
+  });
+  $("share-revoke").addEventListener("click", async () => {
+    try {
+      const a = $("share-revoke").dataset.action;
+      if (a === "revoke") {
+        if (!confirm("Stop accepting NEW people via this link?\nPeople already on the list keep their access.")) return;
+        await api("share_revoke_link", { body: { map_id: currentShareMapId } });
+      } else {
+        await ensureShareLink();
+      }
+      await refreshShareState();
+    } catch (e) { flashShare(e.message, false); }
+  });
+  $("share-regenerate").addEventListener("click", async () => {
+    try {
+      if (!confirm("Generate a new link?\nThe old URL stops working immediately. People already on the list keep their access.")) return;
+      const rights = $("share-rights").value;
+      await api("share_regenerate", { body: { map_id: currentShareMapId, rights } });
+      await refreshShareState();
+      flashShare("New link generated.", true);
+    } catch (e) { flashShare(e.message, false); }
+  });
+}
+
+function flashShare(text, ok) {
+  const m = $("share-msg"); m.textContent = text; m.className = "msg " + (ok ? "ok" : "");
 }
 
 async function logout() {
