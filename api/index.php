@@ -7,7 +7,7 @@ declare(strict_types=1);
 require __DIR__ . '/db.php';
 
 const MAIL_FROM = 'McMindMap <noreply@aukes.com>';
-const APP_URL   = 'https://mindmap.apps.aukes.com';
+define('APP_URL', getenv('APP_URL') ?: 'https://mindmap.apps.aukes.com');
 const RESET_TTL = 3600;   // password-reset link valid for 1 hour
 
 function send_mail(string $to, string $subject, string $body): bool {
