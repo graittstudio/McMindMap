@@ -78,6 +78,29 @@ function public_user(array $u): array {
     ];
 }
 
+// Returns 'owner' | 'write' | 'read' | null for a given user against a map.
+// Used by every endpoint that touches a map's content, so the share-access
+// logic lives in exactly one place.
+function map_access(int $mapId, int $userId): ?string {
+    $st = db()->prepare('SELECT user_id FROM maps WHERE id = ?');
+    $st->execute([$mapId]);
+    $m = $st->fetch();
+    if (!$m) return null;
+    if ((int)$m['user_id'] === $userId) return 'owner';
+    $st = db()->prepare('
+        SELECT c.rights FROM share_claims c
+        JOIN map_shares s ON s.id = c.share_id
+        WHERE s.map_id = ? AND c.user_id = ?
+    ');
+    $st->execute([$mapId, $userId]);
+    $r = $st->fetch();
+    return $r ? $r['rights'] : null;
+}
+
+function require_owner(int $mapId, int $userId): void {
+    if (map_access($mapId, $userId) !== 'owner') fail('not allowed', 403);
+}
+
 $action = $_GET['action'] ?? '';
 $isPost = ($_SERVER['REQUEST_METHOD'] === 'POST');
 
@@ -268,20 +291,53 @@ case 'save_prefs':
     out(['ok' => true]);
 
 case 'maps':
+    // own maps + maps shared with this user (separate lists so the UI can
+    // render two sections with appropriate badges).
     $st = db()->prepare('SELECT id, title, created_at, updated_at FROM maps WHERE user_id = ? ORDER BY updated_at DESC');
     $st->execute([$user['id']]);
-    out(['maps' => $st->fetchAll()]);
+    $own = $st->fetchAll();
+    $st = db()->prepare("
+        SELECT m.id, m.title, m.updated_at, c.rights,
+               u.display_name AS owner_display, u.username AS owner_username
+        FROM share_claims c
+        JOIN map_shares s ON s.id = c.share_id
+        JOIN maps m       ON m.id = s.map_id
+        JOIN users u      ON u.id = m.user_id
+        WHERE c.user_id = ?
+        ORDER BY m.updated_at DESC
+    ");
+    $st->execute([$user['id']]);
+    $shared = array_map(function ($r) {
+        return [
+            'id'         => (int)$r['id'],
+            'title'      => $r['title'],
+            'updated_at' => $r['updated_at'],
+            'rights'     => $r['rights'],
+            'owner_name' => $r['owner_display'] ?: $r['owner_username'],
+        ];
+    }, $st->fetchAll());
+    out(['maps' => $own, 'shared' => $shared]);
 
 case 'map':
     $id = (int)($_GET['id'] ?? 0);
-    $st = db()->prepare('SELECT id, title, data, created_at, updated_at FROM maps WHERE id = ? AND user_id = ?');
-    $st->execute([$id, $user['id']]);
+    $access = map_access($id, (int)$user['id']);
+    if (!$access) fail('map not found', 404);
+    $st = db()->prepare('SELECT id, title, data, created_at, updated_at, user_id FROM maps WHERE id = ?');
+    $st->execute([$id]);
     $m = $st->fetch();
-    if (!$m) fail('map not found', 404);
     $m['data'] = json_decode($m['data'] ?: '{}', true);
+    $m['access'] = $access;                 // 'owner' | 'write' | 'read'
+    if ($access !== 'owner') {
+        $st = db()->prepare('SELECT display_name, username FROM users WHERE id = ?');
+        $st->execute([$m['user_id']]);
+        $o = $st->fetch();
+        $m['owner_name'] = $o['display_name'] ?: $o['username'];
+    }
+    unset($m['user_id']);
     out(['map' => $m]);
 
 case 'save_map':
+    // owner: title + data; writer: data only; reader: refused.
     if (!$isPost) fail('POST required', 405);
     $b = body();
     $title = trim((string)($b['title'] ?? 'Untitled')) ?: 'Untitled';
@@ -290,10 +346,19 @@ case 'save_map':
     $json = json_encode($data);
     $id = (int)($b['id'] ?? 0);
     if ($id > 0) {
-        $st = db()->prepare('UPDATE maps SET title = ?, data = ?, updated_at = datetime(\'now\') WHERE id = ? AND user_id = ?');
-        $st->execute([$title, $json, $id, $user['id']]);
-        if ($st->rowCount() === 0) fail('map not found', 404);
+        $access = map_access($id, (int)$user['id']);
+        if (!$access) fail('map not found', 404);
+        if ($access === 'owner') {
+            $st = db()->prepare('UPDATE maps SET title = ?, data = ?, updated_at = datetime(\'now\') WHERE id = ?');
+            $st->execute([$title, $json, $id]);
+        } elseif ($access === 'write') {
+            $st = db()->prepare('UPDATE maps SET data = ?, updated_at = datetime(\'now\') WHERE id = ?');
+            $st->execute([$json, $id]);
+        } else {
+            fail('this map is read-only', 403);
+        }
     } else {
+        // brand-new map -> always belongs to current user
         $st = db()->prepare('INSERT INTO maps (user_id, title, data) VALUES (?, ?, ?)');
         $st->execute([$user['id'], $title, $json]);
         $id = (int)db()->lastInsertId();
@@ -303,10 +368,196 @@ case 'save_map':
     out(['map' => $st->fetch()]);
 
 case 'delete_map':
+    // owner only -- writers can't delete somebody else's map.
     if (!$isPost) fail('POST required', 405);
     $id = (int)(body()['id'] ?? 0);
     $st = db()->prepare('DELETE FROM maps WHERE id = ? AND user_id = ?');
     $st->execute([$id, $user['id']]);
+    out(['ok' => true]);
+
+// ---- Sharing -------------------------------------------------------------
+// Single share link per map. The link is multi-claim: anyone who opens it
+// while signed in becomes a named accepter visible to the owner. Revoking
+// the LINK stops new accepters; existing claims keep working. Regenerating
+// rotates the token so old URLs die while claims survive.
+
+case 'share_state':
+    // owner-side: current link + list of accepters with display names.
+    $mapId = (int)($_GET['map_id'] ?? 0);
+    require_owner($mapId, (int)$user['id']);
+    $st = db()->prepare('SELECT * FROM map_shares WHERE map_id = ?');
+    $st->execute([$mapId]);
+    $s = $st->fetch();
+    $share = $s ? [
+        'token'  => $s['token'],
+        'rights' => $s['rights'],
+        'active' => (int)$s['active'] === 1,
+        'link'   => APP_URL . '/share.html?t=' . $s['token'],
+    ] : null;
+    $claims = [];
+    if ($s) {
+        $cs = db()->prepare("
+            SELECT c.id, c.rights, c.accepted_at,
+                   u.display_name, u.username
+            FROM share_claims c
+            JOIN users u ON u.id = c.user_id
+            WHERE c.share_id = ?
+            ORDER BY c.accepted_at DESC
+        ");
+        $cs->execute([$s['id']]);
+        foreach ($cs->fetchAll() as $r) {
+            $claims[] = [
+                'id'          => (int)$r['id'],
+                'rights'      => $r['rights'],
+                'accepted_at' => $r['accepted_at'],
+                'name'        => $r['display_name'] ?: $r['username'],
+            ];
+        }
+    }
+    out(['share' => $share, 'claims' => $claims]);
+
+case 'share_link':
+    // owner-side: get-or-create the share for a map, set/refresh rights,
+    // ensure active. Does NOT rotate the token (use share_regenerate).
+    if (!$isPost) fail('POST required', 405);
+    $b = body();
+    $mapId = (int)($b['map_id'] ?? 0);
+    require_owner($mapId, (int)$user['id']);
+    $rights = (($b['rights'] ?? '') === 'write') ? 'write' : 'read';
+    $st = db()->prepare('SELECT * FROM map_shares WHERE map_id = ?');
+    $st->execute([$mapId]);
+    $s = $st->fetch();
+    if (!$s) {
+        $token = bin2hex(random_bytes(16));
+        db()->prepare('INSERT INTO map_shares (map_id, token, rights) VALUES (?, ?, ?)')
+            ->execute([$mapId, $token, $rights]);
+    } else {
+        db()->prepare('UPDATE map_shares SET rights = ?, active = 1 WHERE id = ?')
+            ->execute([$rights, $s['id']]);
+    }
+    $st->execute([$mapId]);
+    $s = $st->fetch();
+    out([
+        'token'  => $s['token'],
+        'rights' => $s['rights'],
+        'active' => (int)$s['active'] === 1,
+        'link'   => APP_URL . '/share.html?t=' . $s['token'],
+    ]);
+
+case 'share_revoke_link':
+    // owner-side: stop accepting new claims. Existing claims keep working.
+    if (!$isPost) fail('POST required', 405);
+    $mapId = (int)(body()['map_id'] ?? 0);
+    require_owner($mapId, (int)$user['id']);
+    db()->prepare('UPDATE map_shares SET active = 0 WHERE map_id = ?')->execute([$mapId]);
+    out(['ok' => true]);
+
+case 'share_regenerate':
+    // owner-side: rotate the token. Old URLs become invalid. Existing
+    // accepters keep their access (their claim row is untouched).
+    if (!$isPost) fail('POST required', 405);
+    $b = body();
+    $mapId = (int)($b['map_id'] ?? 0);
+    require_owner($mapId, (int)$user['id']);
+    $rights = (($b['rights'] ?? '') === 'write') ? 'write' : 'read';
+    $token = bin2hex(random_bytes(16));
+    $st = db()->prepare('SELECT id FROM map_shares WHERE map_id = ?');
+    $st->execute([$mapId]);
+    if ($st->fetch()) {
+        db()->prepare('UPDATE map_shares SET token = ?, rights = ?, active = 1 WHERE map_id = ?')
+            ->execute([$token, $rights, $mapId]);
+    } else {
+        db()->prepare('INSERT INTO map_shares (map_id, token, rights) VALUES (?, ?, ?)')
+            ->execute([$mapId, $token, $rights]);
+    }
+    out([
+        'token'  => $token,
+        'rights' => $rights,
+        'active' => true,
+        'link'   => APP_URL . '/share.html?t=' . $token,
+    ]);
+
+case 'share_revoke_claim':
+    // owner-side: remove one specific accepter's access.
+    if (!$isPost) fail('POST required', 405);
+    $claimId = (int)(body()['claim_id'] ?? 0);
+    $st = db()->prepare("
+        SELECT c.id FROM share_claims c
+        JOIN map_shares s ON s.id = c.share_id
+        JOIN maps m       ON m.id = s.map_id
+        WHERE c.id = ? AND m.user_id = ?
+    ");
+    $st->execute([$claimId, $user['id']]);
+    if (!$st->fetch()) fail('not allowed', 403);
+    db()->prepare('DELETE FROM share_claims WHERE id = ?')->execute([$claimId]);
+    out(['ok' => true]);
+
+case 'share_info':
+    // accepter-side preview: title + owner display name + offered rights.
+    $token = trim((string)($_GET['token'] ?? ''));
+    if ($token === '') fail('share token required', 400);
+    $st = db()->prepare("
+        SELECT s.id, s.rights, s.active,
+               m.id AS map_id, m.title,
+               u.id AS owner_id, u.display_name, u.username
+        FROM map_shares s
+        JOIN maps m  ON m.id = s.map_id
+        JOIN users u ON u.id = m.user_id
+        WHERE s.token = ?
+    ");
+    $st->execute([$token]);
+    $r = $st->fetch();
+    if (!$r) fail('this share link is not valid', 404);
+    $alreadyClaimed = false;
+    $cq = db()->prepare('SELECT 1 FROM share_claims WHERE share_id = ? AND user_id = ?');
+    $cq->execute([$r['id'], $user['id']]);
+    if ($cq->fetch()) $alreadyClaimed = true;
+    out([
+        'title'           => $r['title'],
+        'rights'          => $r['rights'],
+        'active'          => (int)$r['active'] === 1,
+        'owner'           => $r['display_name'] ?: $r['username'],
+        'map_id'          => (int)$r['map_id'],
+        'is_owner'        => (int)$r['owner_id'] === (int)$user['id'],
+        'already_claimed' => $alreadyClaimed,
+    ]);
+
+case 'share_claim':
+    // accepter-side: claim the share. Owner becomes able to see this user
+    // by display name in their share-modal.
+    if (!$isPost) fail('POST required', 405);
+    $token = trim((string)(body()['token'] ?? ''));
+    if ($token === '') fail('share token required', 400);
+    $st = db()->prepare("
+        SELECT s.id, s.map_id, s.rights, s.active, m.user_id AS owner_id
+        FROM map_shares s
+        JOIN maps m ON m.id = s.map_id
+        WHERE s.token = ?
+    ");
+    $st->execute([$token]);
+    $s = $st->fetch();
+    if (!$s) fail('this share link is not valid', 404);
+    if ((int)$s['owner_id'] === (int)$user['id']) {
+        // owner clicking their own link -- nothing to claim, just open it.
+        out(['map_id' => (int)$s['map_id'], 'already_yours' => true]);
+    }
+    $cq = db()->prepare('SELECT 1 FROM share_claims WHERE share_id = ? AND user_id = ?');
+    $cq->execute([$s['id'], $user['id']]);
+    if (!$cq->fetch()) {
+        if (!(int)$s['active']) fail('this share link is no longer accepting new people', 410);
+        db()->prepare('INSERT INTO share_claims (share_id, user_id, rights) VALUES (?, ?, ?)')
+            ->execute([$s['id'], $user['id'], $s['rights']]);
+    }
+    out(['map_id' => (int)$s['map_id']]);
+
+case 'share_leave':
+    // accepter-side: remove own claim. Owner sees the row disappear.
+    if (!$isPost) fail('POST required', 405);
+    $mapId = (int)(body()['map_id'] ?? 0);
+    db()->prepare("
+        DELETE FROM share_claims
+        WHERE user_id = ? AND share_id IN (SELECT id FROM map_shares WHERE map_id = ?)
+    ")->execute([$user['id'], $mapId]);
     out(['ok' => true]);
 
 // ---- Admin ----------------------------------------------------------------

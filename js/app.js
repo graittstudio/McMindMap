@@ -19,6 +19,7 @@ const editor = $("editor");
 
 let state = null;          // { nodes: {id:node}, rootId }
 let selectedId = null;
+let readOnly = false;       // shared-with-me view: block all edit operations
 let cam = { x: 0, y: 0, scale: 1 };
 let nextId = 1;
 
@@ -104,6 +105,7 @@ function pushHistory() {
   if (undoStack.length > 120) undoStack.shift();
 }
 function undo() {
+  if (readOnly) return;
   if (undoStack.length < 2) return;
   undoStack.pop();                                   // drop current state
   const prev = JSON.parse(undoStack[undoStack.length - 1]);
@@ -459,6 +461,7 @@ function updateSelection() {
 function select(id) { selectedId = id; updateSelection(); }
 
 function addChild(parentId) {
+  if (readOnly) return;
   const parent = state.nodes[parentId];
   if (!parent) return;
   const sibs = children(parentId);
@@ -483,12 +486,14 @@ function addChild(parentId) {
 }
 
 function addSibling(id) {
+  if (readOnly) return;
   const node = state.nodes[id];
   if (!node || !node.parentId) { addChild(id); return; }
   addChild(node.parentId);
 }
 
 function removeSubtree(id) {
+  if (readOnly) return;
   if (!state.nodes[id] || !state.nodes[id].parentId) return;  // never delete root
   const toDelete = [];
   const collect = (nid) => { toDelete.push(nid); children(nid).forEach((c) => collect(c.id)); };
@@ -520,6 +525,7 @@ function descendantsOf(id) {
 // crosses to the other horizontal side of its parent, mirror the sub-tree
 // left↔right so the side-branches flip to follow the branch's new direction.
 function dragNode(id, dx, dy) {
+  if (readOnly) return;
   const node = state.nodes[id];
   if (!node) return;
   const parent = node.parentId ? state.nodes[node.parentId] : null;
@@ -534,6 +540,7 @@ function dragNode(id, dx, dy) {
 }
 
 function setColor(id, color) {
+  if (readOnly) return;
   let n = state.nodes[id];
   if (!n || !n.parentId) return;
   while (state.nodes[n.parentId].parentId) n = state.nodes[n.parentId];
@@ -541,6 +548,7 @@ function setColor(id, color) {
 }
 
 function attachImage(id, dataUrl) {
+  if (readOnly) return;
   const n = state.nodes[id];
   if (!n) return;
   n.image = dataUrl; save(); render();
@@ -551,6 +559,7 @@ function attachImage(id, dataUrl) {
 let editingId = null;
 
 function beginEdit(id) {
+  if (readOnly) return;
   const node = state.nodes[id];
   if (!node) return;
   editingId = id;
@@ -610,6 +619,7 @@ svg.addEventListener("pointerdown", (e) => {
   const world = screenToWorld(e.clientX, e.clientY);
   if (handle) {
     select(handle.dataset.id);
+    if (readOnly) return;                              // viewer: select-only, no drag
     // Reveal the matching visible handle dot only while the drag lasts.
     document.querySelectorAll(`.handle[data-id="${handle.dataset.id}"]`)
       .forEach((el) => el.classList.add("dragging"));
@@ -807,6 +817,7 @@ window.MindMap = {
     render(); fit(); resetHistory();
   },
   onChange(cb) { changeListeners.push(cb); },
+  setReadOnly(v) { readOnly = !!v; document.body.classList.toggle("readonly", readOnly); },
 };
 
 window.addEventListener("resize", applyCamera);

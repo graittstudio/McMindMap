@@ -166,3 +166,22 @@ button:disabled { opacity: .6; cursor: default; }
   color: var(--err);
 }
 .msg.ok { color: #2f9e44; }
+
+.share-card {
+  background: #fbf4dd;
+  border: 1px solid #e5d6a0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 0 0 14px;
+}
+.share-card .share-title {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+.share-card .share-meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}

@@ -117,6 +117,46 @@ button.chrome {
 .icon { border: none; background: transparent; cursor: pointer; font-size: 15px; padding: 6px 8px; border-radius: 8px; }
 .icon:hover { background: #f0ede6; }
 
+/* Drawer: 'Shared with me' section + rights badge */
+.drawer li.section-head {
+  display: block; margin: 14px 0 6px; padding: 4px 2px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: #9a9588;
+}
+.drawer .map-open .t .badge { margin-left: 6px; }
+.badge {
+  display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px;
+  border-radius: 8px; text-transform: uppercase; letter-spacing: .03em; vertical-align: middle;
+}
+.badge.view { background: #efeadd; color: #6f6952; }
+.badge.edit { background: #d6ecd9; color: #2f6b35; }
+
+/* Share modal */
+.share-link-row { display: flex; gap: 6px; align-items: stretch; margin-top: 6px; }
+.share-link-row input { flex: 1; }
+.share-link-actions { display: flex; gap: 8px; margin-top: 8px; }
+.share-link-actions .ghost { flex: 1; font-size: 12.5px; padding: 6px 10px; }
+.share-revoked-note { margin-top: 8px; font-size: 12.5px; color: #9a8a52; background: #fff7df; border-radius: 8px; padding: 8px 10px; }
+.claims-list { list-style: none; padding: 0; margin: 4px 0 0; }
+.claims-list li { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-bottom: 1px solid #f0ede6; }
+.claims-list li:last-child { border-bottom: none; }
+.claims-list li.empty { color: #9a9588; font-size: 13px; padding: 8px 4px; }
+.claim-name { flex: 1; font-size: 13.5px; }
+
+/* Read-only banner shown above the canvas for shared-with-me viewers */
+.readonly-banner {
+  position: fixed; top: 48px; left: 0; right: 0; z-index: 5;
+  background: #fff7df; border-bottom: 1px solid #e9d896;
+  color: #5a4a18; font-size: 13px; text-align: center; padding: 6px 12px;
+}
+body.readonly #toolbar #btn-add-child,
+body.readonly #toolbar #btn-add-sibling,
+body.readonly #toolbar #btn-delete,
+body.readonly #toolbar #btn-image,
+body.readonly #toolbar #swatches,
+body.readonly #toolbar #btn-undo,
+body.readonly #save-state { display: none; }
+
 /* Modal */
 .modal { position: fixed; inset: 0; z-index: 45; display: flex; align-items: center; justify-content: center; }
 .dialog {
