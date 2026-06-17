@@ -421,10 +421,10 @@ function drawHandle(node, color) {
   gNodes.appendChild(hit);
 
   const h = document.createElementNS(SVG_NS, "circle");
-  h.setAttribute("class", "handle" + (node.id === selectedId ? " selected" : ""));
+  h.setAttribute("class", "handle");
   h.setAttribute("cx", node.x);
   h.setAttribute("cy", node.y);
-  h.setAttribute("r", node.id === selectedId ? 7 : 5);
+  h.setAttribute("r", 5);
   h.setAttribute("fill", color);
   h.dataset.id = node.id;
   gNodes.appendChild(h);
