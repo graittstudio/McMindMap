@@ -704,7 +704,29 @@ function buildSwatches() {
     s.addEventListener("click", () => { if (selectedId) setColor(selectedId, col); });
     host.appendChild(s);
   });
+  // Custom colour picker — clicking opens the OS colour picker (macOS has a
+  // full colour wheel + a built-in eyedropper there too).
+  const custom = document.createElement("span");
+  custom.className = "swatch custom";
+  custom.title = "Custom colour";
+  custom.addEventListener("click", () => { if (selectedId) $("custom-color").click(); });
+  host.appendChild(custom);
+  // Eyedropper (Chrome/Edge): pick any colour from anywhere on screen.
+  if (typeof window.EyeDropper === "function") {
+    const pip = document.createElement("button");
+    pip.className = "pipet-btn"; pip.type = "button"; pip.title = "Eyedropper — pick a colour from the screen";
+    pip.textContent = "💧";
+    pip.addEventListener("click", async () => {
+      if (!selectedId) return;
+      try { const r = await new window.EyeDropper().open(); setColor(selectedId, r.sRGBHex); } catch (_) {}
+    });
+    host.appendChild(pip);
+  }
 }
+
+$("custom-color").addEventListener("input", (e) => {
+  if (selectedId) setColor(selectedId, e.target.value);
+});
 
 function activeId() { return (selectedId && state.nodes[selectedId]) ? selectedId : state.rootId; }
 $("btn-add-child").addEventListener("click", () => addChild(activeId()));

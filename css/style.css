@@ -185,6 +185,21 @@ body[data-theme="dark"] .branch-text { stroke: rgba(20,22,26,.85); fill: #f0f0f2
   cursor: pointer;
 }
 .swatch.active { box-shadow: 0 0 0 2px #333; }
+.swatch.custom {
+  background: conic-gradient(#e8453c, #e08a16, #f4d300, #3aa655, #16b3a7, #1d9bf0, #8a4fc7, #e0529c, #e8453c);
+}
+.pipet-btn {
+  width: 22px; height: 22px;
+  padding: 0;
+  border: 1px solid #d4d0c7;
+  background: #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pipet-btn:hover { background: #f3f0e9; }
 
 #canvas {
   position: fixed;
