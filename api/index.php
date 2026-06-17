@@ -547,6 +547,23 @@ case 'share_claim':
         if (!(int)$s['active']) fail('this share link is no longer accepting new people', 410);
         db()->prepare('INSERT INTO share_claims (share_id, user_id, rights) VALUES (?, ?, ?)')
             ->execute([$s['id'], $user['id'], $s['rights']]);
+        // First-time claim -> notify the owner so they aren't surprised. We
+        // skip on subsequent visits and on owner-self-claim (handled above).
+        $ow = db()->prepare("
+            SELECT u.email, u.display_name, u.username, m.title
+            FROM maps m JOIN users u ON u.id = m.user_id
+            WHERE m.id = ?
+        ");
+        $ow->execute([$s['map_id']]);
+        $owner = $ow->fetch();
+        if ($owner && !empty($owner['email'])) {
+            $who = $user['display_name'] ?: $user['username'];
+            $rightsLabel = $s['rights'] === 'write' ? 'edit' : 'view';
+            $body = "Hi " . ($owner['display_name'] ?: $owner['username']) . ",\n\n" .
+                $who . " just opened your shared mindmap \"" . $owner['title'] . "\" (" . $rightsLabel . " access).\n" .
+                "They show up in the share list now. Open the mindmap and click the share button (\xe2\x86\x97) to manage who can see what.\n";
+            send_mail($owner['email'], 'Someone opened your shared mindmap', $body);
+        }
     }
     out(['map_id' => (int)$s['map_id']]);
 
