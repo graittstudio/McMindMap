@@ -6,6 +6,7 @@ workflow:
 
 stages:
   - lint
+  - test
   - deploy
 
 # ── Lint ────────────────────────────────────────────────────────────────────
@@ -16,15 +17,55 @@ lint:
   script:
     - test -f index.html || (echo "index.html missing" && exit 1)
     - test -f login.html || (echo "login.html missing" && exit 1)
+    - test -f share.html || (echo "share.html missing" && exit 1)
     - php --version
-    - 'echo "PHP syntax check…"; for f in api/*.php; do php -l "$f"; done'
+    - 'echo "PHP syntax check…"; for f in api/*.php tests/backend/*.php; do php -l "$f"; done'
     - 'if find . -name "*.db" -not -path "./.git/*" | grep -q .; then echo "DB file committed!"; exit 1; fi'
     - export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && nvm use 20 || true
-    - 'for f in js/app.js js/shell.js js/auth.js js/reset.js; do node --check "$f"; done'
+    - 'for f in js/app.js js/shell.js js/auth.js js/reset.js js/share.js; do node --check "$f"; done'
     - echo "OK"
 
+# ── Backend tests ───────────────────────────────────────────────────────────
+# Spin up the PHP built-in server against a temp SQLite DB, then hit the real
+# api/index.php with curl. Lives on the shell runner alongside `lint` -- no
+# image needed because PHP is already there.
+
+backend-test:
+  stage: test
+  needs: [lint]
+  script:
+    - sh tests/backend/run.sh
+
+# ── End-to-end tests ────────────────────────────────────────────────────────
+# Playwright drives Chromium against the same PHP server. The mbappe shell
+# runner is shell-only, so this job needs a docker executor to pick up the
+# Playwright image. Manual+allow_failure so the deploy doesn't get stuck
+# waiting for it; click "Run" in the GitLab UI once a docker runner is
+# attached (or run `sh tests/e2e/run.sh` locally).
+
+e2e-test:
+  stage: test
+  when: manual
+  allow_failure: true
+  needs: [lint]
+  image: mcr.microsoft.com/playwright:v1.49.0-noble
+  before_script:
+    - apt-get update -qq
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq php-cli php-sqlite3 curl
+  script:
+    - sh tests/e2e/run.sh
+  artifacts:
+    when: on_failure
+    paths:
+      - tests/e2e/test-results/
+      - tests/e2e/junit.xml
+    reports:
+      junit: tests/e2e/junit.xml
+    expire_in: 1 week
+
 # ── Deploy ──────────────────────────────────────────────────────────────────
-# SSH to sebas and git pull in the docroot. Only on main.
+# SSH to sebas and git pull in the docroot. Only on main, only when lint AND
+# both test stages have passed.
 #
 # Required CI/CD variables (masked=false):
 #   MINDMAP_HOST     : sebas.aukes.com
@@ -33,11 +74,7 @@ lint:
 
 deploy:
   stage: deploy
-  # Wait for lint to pass. Previously `needs: []` made deploy a DAG
-  # root, which let it run *in parallel* with lint on main -- a failing
-  # lint would not stop the deploy. needs: [lint] re-establishes the
-  # implicit stage-order guarantee explicitly.
-  needs: [lint]
+  needs: [lint, backend-test]
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
   script:

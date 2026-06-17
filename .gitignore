@@ -6,3 +6,9 @@ node_modules/
 *.db-wal
 *.db-shm
 .data/
+
+# e2e build artefacts
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+tests/e2e/junit.xml
+tests/e2e/.last-run.json
