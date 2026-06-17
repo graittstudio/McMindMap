@@ -37,17 +37,14 @@ backend-test:
     - sh tests/backend/run.sh
 
 # ── End-to-end tests ────────────────────────────────────────────────────────
-# Playwright drives Chromium against the same PHP server. The mbappe shell
-# runner is shell-only, so this job needs a docker executor to pick up the
-# Playwright image. Manual+allow_failure so the deploy doesn't get stuck
-# waiting for it; click "Run" in the GitLab UI once a docker runner is
-# attached (or run `sh tests/e2e/run.sh` locally).
+# Playwright drives Chromium against the same PHP server. Picked up by the
+# project-scoped `mbappe-docker-mindmap` runner (docker executor, tag:
+# docker). PHP is one apt-get away inside the Playwright image.
 
 e2e-test:
   stage: test
-  when: manual
-  allow_failure: true
   needs: [lint]
+  tags: [docker]
   image: mcr.microsoft.com/playwright:v1.49.0-noble
   before_script:
     - apt-get update -qq
@@ -74,7 +71,7 @@ e2e-test:
 
 deploy:
   stage: deploy
-  needs: [lint, backend-test]
+  needs: [lint, backend-test, e2e-test]
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
   script:
