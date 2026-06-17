@@ -120,29 +120,64 @@ if ($action === 'logout') {
 }
 
 if ($action === 'request_reset') {
-    // Public. Always responds OK (never reveal whether an account exists).
+    // Public. Doubles as the sign-up endpoint: when the login is an
+    // unrecognised email we create the account on the fly and email the same
+    // kind of token-link, which lands on reset.html to set a first password.
+    // Always responds OK so a stranger can't probe which addresses exist.
     if (!$isPost) fail('POST required', 405);
     $login = trim((string)(body()['login'] ?? ''));
-    if ($login !== '') {
-        $st = db()->prepare('SELECT * FROM users WHERE username = ? OR (email <> "" AND email = ?)');
-        $st->execute([$login, $login]);
-        $u = $st->fetch();
-        if ($u && !empty($u['email'])) {
-            // one active token per user
-            $d = db()->prepare('DELETE FROM password_resets WHERE user_id = ?');
-            $d->execute([$u['id']]);
-            $token = bin2hex(random_bytes(32));
-            $hash = hash('sha256', $token);
-            $exp = date('Y-m-d H:i:s', time() + RESET_TTL);
-            $ins = db()->prepare('INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, ?)');
-            $ins->execute([$u['id'], $hash, $exp]);
-            $link = APP_URL . '/reset.html?token=' . $token;
-            $body = "Hi " . ($u['display_name'] ?: $u['username']) . ",\n\n" .
-                    "Someone asked to reset the password for your McMindMap account (" . $u['username'] . ").\n" .
-                    "Open this link to choose a new password (valid for 1 hour):\n\n" . $link . "\n\n" .
-                    "If you didn't request this, you can ignore this email — your password stays unchanged.\n";
-            send_mail($u['email'], 'Reset your McMindMap password', $body);
+    if ($login === '') out(['ok' => true]);
+
+    $st = db()->prepare('SELECT * FROM users WHERE username = ? OR (email <> "" AND email = ?)');
+    $st->execute([$login, $login]);
+    $u = $st->fetch();
+    $isNew = false;
+
+    if (!$u && filter_var($login, FILTER_VALIDATE_EMAIL)) {
+        $local = strtolower(strstr($login, '@', true));
+        $base = preg_replace('/[^a-z0-9_-]/', '', $local);
+        if ($base === '') $base = 'user';
+        $username = $base;
+        $check = db()->prepare('SELECT 1 FROM users WHERE username = ?');
+        $n = 1;
+        while (true) {
+            $check->execute([$username]);
+            if (!$check->fetch()) break;
+            $username = $base . $n++;
         }
+        $placeholder = password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT);
+        db()->prepare('INSERT INTO users (username, password_hash, role, display_name, email, must_change) VALUES (?, ?, "user", ?, ?, 1)')
+            ->execute([$username, $placeholder, $username, $login]);
+        $u = [
+            'id'           => (int)db()->lastInsertId(),
+            'username'     => $username,
+            'email'        => $login,
+            'display_name' => $username,
+        ];
+        $isNew = true;
+    }
+
+    if ($u && !empty($u['email'])) {
+        db()->prepare('DELETE FROM password_resets WHERE user_id = ?')->execute([$u['id']]);
+        $token = bin2hex(random_bytes(32));
+        $hash = hash('sha256', $token);
+        $exp = date('Y-m-d H:i:s', time() + RESET_TTL);
+        db()->prepare('INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, ?)')
+            ->execute([$u['id'], $hash, $exp]);
+        $link = APP_URL . '/reset.html?token=' . $token;
+        if ($isNew) {
+            $subject = 'Welcome to McMindMap';
+            $mailBody = "Hi,\n\n" .
+                "Your McMindMap account is ready. Open this link to set a password (valid for 1 hour):\n\n" . $link . "\n\n" .
+                "Your username is: " . $u['username'] . "\n";
+        } else {
+            $subject = 'Reset your McMindMap password';
+            $mailBody = "Hi " . ($u['display_name'] ?: $u['username']) . ",\n\n" .
+                "Someone asked to reset the password for your McMindMap account (" . $u['username'] . ").\n" .
+                "Open this link to choose a new password (valid for 1 hour):\n\n" . $link . "\n\n" .
+                "If you didn't request this, you can ignore this email — your password stays unchanged.\n";
+        }
+        send_mail($u['email'], $subject, $mailBody);
     }
     out(['ok' => true]);
 }
