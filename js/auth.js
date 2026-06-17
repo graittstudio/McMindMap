@@ -76,8 +76,35 @@ $("reset-request-form").addEventListener("submit", async (e) => {
     await api("request_reset", { body: { login: $("reset-login").value } });
   } catch (err) { /* never reveal errors here */ }
   msg.classList.add("ok");
-  msg.textContent = "Check your inbox — your link is on the way.";
+  msg.textContent = "If that account exists, a reset link has been emailed. Check your inbox.";
   btn.disabled = true;
+});
+
+$("signup-link").addEventListener("click", () => {
+  $("login-form").hidden = true;
+  $("signup-form").hidden = false;
+  $("signup-name").focus();
+});
+$("signup-back").addEventListener("click", () => {
+  $("signup-form").hidden = true;
+  $("login-form").hidden = false;
+});
+$("signup-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = $("signup-btn"), msg = $("signup-msg");
+  msg.textContent = ""; msg.classList.remove("ok");
+  const name = $("signup-name").value.trim();
+  const email = $("signup-email").value.trim();
+  if (!name || !email) { msg.textContent = "Please fill in both fields."; return; }
+  btn.disabled = true;
+  try {
+    await api("signup", { body: { name, email } });
+    msg.classList.add("ok");
+    msg.textContent = "Check your inbox — your setup link is on the way.";
+  } catch (err) {
+    msg.textContent = err.message;
+    btn.disabled = false;
+  }
 });
 $("change-show").addEventListener("change", (e) => {
   const t = e.target.checked ? "text" : "password";
