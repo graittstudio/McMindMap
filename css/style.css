@@ -297,6 +297,22 @@ body[data-theme="dark"] .branch-text { stroke: rgba(20,22,26,.85); fill: #f0f0f2
 .handle.dragging { stroke: var(--selected); stroke-width: 3.5; opacity: 1; }
 
 .node-image { cursor: pointer; }
+.node-image.selected { outline: 2px solid var(--selected); outline-offset: 2px; cursor: move; }
+
+/* Resize / delete affordances on top of the SELECTED node's image */
+.image-handle { cursor: pointer; }
+.image-resize {
+  fill: #fff; stroke: var(--selected); stroke-width: 2;
+  cursor: nwse-resize;
+}
+.image-delete {
+  fill: var(--selected); stroke: #fff; stroke-width: 2;
+}
+.image-delete-x {
+  fill: #fff; font-size: 12px; font-weight: 700;
+  text-anchor: middle; dominant-baseline: central;
+  pointer-events: none; user-select: none;
+}
 
 /* Inline add-branch buttons on the selected node */
 .add-btn { cursor: pointer; }
