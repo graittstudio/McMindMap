@@ -188,18 +188,23 @@ body[data-theme="dark"] .branch-text { stroke: rgba(20,22,26,.85); fill: #f0f0f2
 .swatch.custom {
   background: conic-gradient(#e8453c, #e08a16, #f4d300, #3aa655, #16b3a7, #1d9bf0, #8a4fc7, #e0529c, #e8453c);
 }
-.pipet-btn {
-  width: 22px; height: 22px;
-  padding: 0;
-  border: 1px solid #d4d0c7;
-  background: #fff;
-  border-radius: 50%;
-  cursor: pointer;
-  font-size: 11px;
-  line-height: 1;
-  display: inline-flex; align-items: center; justify-content: center;
+.swatch-wrap {
+  position: relative; display: inline-block;
+  width: 18px; height: 18px;
+  vertical-align: middle;
 }
-.pipet-btn:hover { background: #f3f0e9; }
+.swatch-wrap .swatch.custom {
+  position: absolute; inset: 0;
+  pointer-events: none;
+}
+#custom-color {
+  position: absolute; inset: -2px;
+  width: 22px; height: 22px;
+  opacity: 0;
+  border: 0; padding: 0; margin: 0;
+  cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+}
 
 #canvas {
   position: fixed;

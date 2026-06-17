@@ -704,14 +704,19 @@ function buildSwatches() {
     s.addEventListener("click", () => { if (selectedId) setColor(selectedId, col); });
     host.appendChild(s);
   });
-  // Custom colour: clicking opens the OS colour picker, which already has a
-  // full colour wheel + built-in eyedropper (the small pipette icon in the
-  // macOS picker window). One button, every colour.
-  const custom = document.createElement("span");
-  custom.className = "swatch custom";
-  custom.title = "Custom colour — opens the system picker (with eyedropper)";
-  custom.addEventListener("click", () => { if (selectedId) $("custom-color").click(); });
-  host.appendChild(custom);
+  // Custom colour: stack the native <input type=color> on top of a rainbow
+  // swatch with opacity 0. iOS Safari won't open the picker for a hidden
+  // input via .click(); putting a real, sized input above the visual swatch
+  // makes tapping the rainbow IS a tap on the input, so the picker opens
+  // natively on every platform.
+  const wrap = document.createElement("span");
+  wrap.className = "swatch-wrap";
+  wrap.title = "Custom colour — opens the system picker (with eyedropper)";
+  const face = document.createElement("span");
+  face.className = "swatch custom";
+  wrap.appendChild(face);
+  wrap.appendChild($("custom-color"));
+  host.appendChild(wrap);
 }
 
 $("custom-color").addEventListener("input", (e) => {
