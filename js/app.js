@@ -239,8 +239,8 @@ function render() {
     path.dataset.id = node.id;
     gBranches.appendChild(path);
 
-    drawLabel(node, start, end, color, depth);
     if (node.image) drawImage(node);          // image IS the node, centred on its point
+    drawLabel(node, start, end, color, depth); // label on top, lifted past the image
     drawHandle(node, color);                  // grab handle on top — the ONLY drag target
   }
 
@@ -336,7 +336,8 @@ function drawLabel(node, start, end, color, depth) {
   text.setAttribute("font-size", fs);
   text.setAttribute("fill", darken(color, 0.45));
   text.style.textAnchor = anchor;                  // inline style beats the .branch-text CSS
-  text.setAttribute("dy", -(half + 5));            // float just above the branch
+  const imgClearance = node.image ? 90 / 2 + 8 : 0; // lift past the centred image (ih=90)
+  text.setAttribute("dy", -(half + 5 + imgClearance)); // float just above the branch/image
   const tp = document.createElementNS(SVG_NS, "textPath");
   tp.setAttributeNS("http://www.w3.org/1999/xlink", "href", "#" + pathId);
   tp.setAttribute("href", "#" + pathId);
@@ -583,9 +584,11 @@ let drag = null;
 // "stuck" and make a branch follow the cursor and shoot off screen.
 function endDrag(e) {
   if (drag) {
-    if (!drag.pan && drag.moved) save();
+    if (drag.pan && !drag.moved) select(null);   // tap on empty canvas = deselect
+    else if (!drag.pan && drag.moved) save();
     svg.classList.remove("panning");
   }
+  document.querySelectorAll(".handle.dragging").forEach((el) => el.classList.remove("dragging"));
   drag = null;
   if (e) { try { svg.releasePointerCapture(e.pointerId); } catch (_) {} }
 }
@@ -604,6 +607,9 @@ svg.addEventListener("pointerdown", (e) => {
   const world = screenToWorld(e.clientX, e.clientY);
   if (handle) {
     select(handle.dataset.id);
+    // Reveal the matching visible handle dot only while the drag lasts.
+    document.querySelectorAll(`.handle[data-id="${handle.dataset.id}"]`)
+      .forEach((el) => el.classList.add("dragging"));
     drag = { id: handle.dataset.id, startSX: e.clientX, startSY: e.clientY, lastX: world.x, lastY: world.y, moved: false };
     try { svg.setPointerCapture(e.pointerId); } catch (_) {}
   } else if (idEl) {
