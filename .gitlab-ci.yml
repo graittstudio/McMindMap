@@ -85,7 +85,17 @@ deploy:
     - >
       ssh -o StrictHostKeyChecking=no -i ~/.ssh/mindmap_deploy root@$MINDMAP_HOST
       "cd $MINDMAP_PATH && git pull && echo '✓ git pull done'"
-    - echo "✓ Deployment complete"
+    - |
+      echo "Smoke-checking https://mindmap.apps.aukes.com ..."
+      for i in 1 2 3; do
+        if curl -fsS "https://mindmap.apps.aukes.com/api/index.php?action=me" >/dev/null; then
+          echo "✓ smoke OK — prod is responding"
+          exit 0
+        fi
+        sleep 2
+      done
+      echo "✗ smoke failed — prod might be broken, check Apache + PHP error_log on sebas"
+      exit 1
   environment:
     name: production
     url: https://mindmap.apps.aukes.com
