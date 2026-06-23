@@ -57,6 +57,74 @@ describe('signup', function () {
     });
 });
 
+describe('password reset', function () {
+    // We can't reconstruct the plaintext token from the SHA-256 hash that lives
+    // in the DB, so for the reset_with_token cases we inject a known token
+    // directly. request_reset itself is tested via row-count: known login -> +1,
+    // unknown -> +0 (anti-enumeration response is still 200).
+    $pdo = new PDO('sqlite:' . getenv('MCMINDMAP_DB'));
+
+    reset_session();
+    it('request_reset for a known email creates a token row', function () use ($pdo) {
+        $before = (int)$pdo->query('SELECT COUNT(*) FROM password_resets')->fetchColumn();
+        $r = api('POST', 'request_reset', ['login' => 'alice@example.com']);
+        eq($r['code'], 200);
+        $after = (int)$pdo->query('SELECT COUNT(*) FROM password_resets')->fetchColumn();
+        eq($after, $before + 1, 'one new row');
+    });
+    it('request_reset for an unknown login is silently OK and leaves the DB alone', function () use ($pdo) {
+        $before = (int)$pdo->query('SELECT COUNT(*) FROM password_resets')->fetchColumn();
+        $r = api('POST', 'request_reset', ['login' => 'noone@example.com']);
+        eq($r['code'], 200);
+        $after = (int)$pdo->query('SELECT COUNT(*) FROM password_resets')->fetchColumn();
+        eq($after, $before, 'no new row');
+    });
+    it('reset_with_token swaps the password, marks the token used, and lets the new password log in', function () use ($pdo) {
+        $token = 'reset-happy-token';
+        $hash  = hash('sha256', $token);
+        $uid   = (int)$pdo->query("SELECT id FROM users WHERE username='alice'")->fetchColumn();
+        $pdo->prepare("INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, datetime('now','+1 hour'))")->execute([$uid, $hash]);
+        $r = api('POST', 'reset_with_token', ['token' => $token, 'new' => 'reset-new-pass']);
+        eq($r['code'], 200);
+        $stmt = $pdo->prepare('SELECT used FROM password_resets WHERE token_hash = ?');
+        $stmt->execute([$hash]);
+        eq((int)$stmt->fetchColumn(), 1, 'token marked used');
+
+        reset_session();
+        $r = api('POST', 'login', ['username' => 'alice', 'password' => 'reset-new-pass']);
+        eq($r['code'], 200, 'new password works');
+        api('POST', 'logout', []);
+
+        // restore alice's original password so downstream describes keep working
+        $pdo->prepare('UPDATE users SET password_hash = ? WHERE username = ?')
+            ->execute([password_hash('alice123', PASSWORD_DEFAULT), 'alice']);
+    });
+    it('reset_with_token rejects a token that was already used', function () use ($pdo) {
+        $token = 'reset-used-token';
+        $hash  = hash('sha256', $token);
+        $uid   = (int)$pdo->query("SELECT id FROM users WHERE username='alice'")->fetchColumn();
+        $pdo->prepare("INSERT INTO password_resets (user_id, token_hash, expires_at, used) VALUES (?, ?, datetime('now','+1 hour'), 1)")->execute([$uid, $hash]);
+        $r = api('POST', 'reset_with_token', ['token' => $token, 'new' => 'should-not-work-1']);
+        eq($r['code'], 400);
+    });
+    it('reset_with_token rejects an expired token', function () use ($pdo) {
+        $token = 'reset-expired-token';
+        $hash  = hash('sha256', $token);
+        $uid   = (int)$pdo->query("SELECT id FROM users WHERE username='alice'")->fetchColumn();
+        $pdo->prepare("INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, datetime('now','-1 hour'))")->execute([$uid, $hash]);
+        $r = api('POST', 'reset_with_token', ['token' => $token, 'new' => 'should-not-work-2']);
+        eq($r['code'], 400);
+    });
+    it('reset_with_token refuses a password shorter than 8 chars', function () use ($pdo) {
+        $token = 'reset-short-pw';
+        $hash  = hash('sha256', $token);
+        $uid   = (int)$pdo->query("SELECT id FROM users WHERE username='alice'")->fetchColumn();
+        $pdo->prepare("INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, datetime('now','+1 hour'))")->execute([$uid, $hash]);
+        $r = api('POST', 'reset_with_token', ['token' => $token, 'new' => 'short']);
+        eq($r['code'], 400);
+    });
+});
+
 describe('maps CRUD', function () {
     reset_session();
     api('POST', 'login', ['username' => 'alice', 'password' => 'alice123']);
