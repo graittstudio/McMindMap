@@ -72,15 +72,21 @@ e2e-test:
 deploy:
   stage: deploy
   needs: [lint, backend-test, e2e-test]
+  # Containerized: de key wordt in een wegwerp-container geschreven en
+  # verdwijnt ermee — voorheen bleef ~/.ssh/mindmap_deploy op de
+  # shell-runner-host achter, leesbaar voor elke andere shell-job.
+  image: debian:bookworm-slim
+  tags: [docker]
+  variables:
+    GIT_STRATEGY: none
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
   script:
+    - apt-get update -qq && apt-get install -y -qq openssh-client curl ca-certificates
     - mkdir -p ~/.ssh && chmod 700 ~/.ssh
     - printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/mindmap_deploy
     - chmod 600 ~/.ssh/mindmap_deploy
     - ssh-keygen -y -f ~/.ssh/mindmap_deploy > /dev/null
-    - eval "$(ssh-agent -s)"
-    - ssh-add ~/.ssh/mindmap_deploy
     - echo "Deploying to root@$MINDMAP_HOST:$MINDMAP_PATH ..."
     - >
       ssh -o StrictHostKeyChecking=no -i ~/.ssh/mindmap_deploy root@$MINDMAP_HOST
