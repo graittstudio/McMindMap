@@ -45,7 +45,7 @@ e2e-test:
   stage: test
   needs: [lint]
   tags: [docker]
-  image: mcr.microsoft.com/playwright:v1.49.0-noble
+  image: mcr.microsoft.com/playwright:v1.61.1-jammy
   before_script:
     - apt-get update -qq
     - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq php-cli php-sqlite3 curl
