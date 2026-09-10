@@ -9,11 +9,16 @@ stages:
   - test
   - deploy
 
+  default:
+    image: node:20-bookworm-slim
+
 # ── Lint ────────────────────────────────────────────────────────────────────
 # Static app: JS syntax check + sanity that the entry files exist.
 
 lint:
   stage: lint
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq php-cli
   script:
     - test -f index.html || (echo "index.html missing" && exit 1)
     - test -f login.html || (echo "login.html missing" && exit 1)
@@ -27,12 +32,14 @@ lint:
 
 # ── Backend tests ───────────────────────────────────────────────────────────
 # Spin up the PHP built-in server against a temp SQLite DB, then hit the real
-# api/index.php with curl. Lives on the shell runner alongside `lint` -- no
-# image needed because PHP is already there.
+# api/index.php with curl. Runs on a shared GitLab runner (PHP installed
+# via before_script since the node:20-bookworm-slim default image has none).
 
 backend-test:
   stage: test
   needs: [lint]
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq php-cli php-sqlite3 curl
   script:
     - sh tests/backend/run.sh
 
