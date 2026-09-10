@@ -39,7 +39,7 @@ backend-test:
   stage: test
   needs: [lint]
   before_script:
-    - apt-get update -qq && apt-get install -y -qq php-cli php-sqlite3 curl
+    - apt-get update -qq && apt-get install -y -qq php-cli php-sqlite3 php-curl curl
   script:
     - sh tests/backend/run.sh
 
@@ -53,7 +53,7 @@ e2e-test:
   image: mcr.microsoft.com/playwright:v1.61.1-jammy
   before_script:
     - apt-get update -qq
-    - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq php-cli php-sqlite3 curl
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq php-cli php-sqlite3 php-curl curl
   script:
     - sh tests/e2e/run.sh
   artifacts:
