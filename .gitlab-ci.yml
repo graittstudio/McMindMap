@@ -44,7 +44,6 @@ backend-test:
 e2e-test:
   stage: test
   needs: [lint]
-  tags: [docker]
   image: mcr.microsoft.com/playwright:v1.61.1-jammy
   before_script:
     - apt-get update -qq
@@ -76,7 +75,6 @@ deploy:
   # verdwijnt ermee — voorheen bleef ~/.ssh/mindmap_deploy op de
   # shell-runner-host achter, leesbaar voor elke andere shell-job.
   image: debian:bookworm-slim
-  tags: [docker]
   variables:
     GIT_STRATEGY: none
   rules:
