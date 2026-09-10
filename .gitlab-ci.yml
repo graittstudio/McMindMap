@@ -9,46 +9,51 @@ stages:
   - test
   - deploy
 
-# ── Lint ────────────────────────────────────────────────────────────────────
+default:
+  image: node:20-bookworm-slim
+
+# -- Lint --------------------------------------------------------------------
 # Static app: JS syntax check + sanity that the entry files exist.
 
 lint:
   stage: lint
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq php-cli
   script:
     - test -f index.html || (echo "index.html missing" && exit 1)
     - test -f login.html || (echo "login.html missing" && exit 1)
     - test -f share.html || (echo "share.html missing" && exit 1)
     - php --version
-    - 'echo "PHP syntax check…"; for f in api/*.php tests/backend/*.php; do php -l "$f"; done'
+    - 'echo "PHP syntax check..."; for f in api/*.php tests/backend/*.php; do php -l "$f"; done'
     - 'if find . -name "*.db" -not -path "./.git/*" | grep -q .; then echo "DB file committed!"; exit 1; fi'
     - export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && nvm use 20 || true
     - 'for f in js/app.js js/shell.js js/auth.js js/reset.js js/share.js; do node --check "$f"; done'
     - echo "OK"
 
-# ── Backend tests ───────────────────────────────────────────────────────────
+# -- Backend tests -----------------------------------------------------------
 # Spin up the PHP built-in server against a temp SQLite DB, then hit the real
-# api/index.php with curl. Lives on the shell runner alongside `lint` -- no
-# image needed because PHP is already there.
+# api/index.php with curl. Runs on a shared GitLab runner (PHP installed via
+# before_script since the node:20-bookworm-slim default image has none).
 
 backend-test:
   stage: test
   needs: [lint]
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq php-cli php-sqlite3 php-curl curl
   script:
     - sh tests/backend/run.sh
 
-# ── End-to-end tests ────────────────────────────────────────────────────────
-# Playwright drives Chromium against the same PHP server. Picked up by the
-# project-scoped `mbappe-docker-mindmap` runner (docker executor, tag:
-# docker). PHP is one apt-get away inside the Playwright image.
+# -- End-to-end tests --------------------------------------------------------
+# Playwright drives Chromium against the same PHP server. Runs on a shared
+# GitLab runner using Microsoft's Playwright image; PHP is one apt-get away.
 
 e2e-test:
   stage: test
   needs: [lint]
-  tags: [docker]
   image: mcr.microsoft.com/playwright:v1.61.1-jammy
   before_script:
     - apt-get update -qq
-    - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq php-cli php-sqlite3 curl
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq php-cli php-sqlite3 php-curl curl
   script:
     - sh tests/e2e/run.sh
   artifacts:
@@ -60,7 +65,7 @@ e2e-test:
       junit: tests/e2e/junit.xml
     expire_in: 1 week
 
-# ── Deploy ──────────────────────────────────────────────────────────────────
+# -- Deploy ------------------------------------------------------------------
 # SSH to sebas and git pull in the docroot. Only on main, only when lint AND
 # both test stages have passed.
 #
@@ -73,10 +78,9 @@ deploy:
   stage: deploy
   needs: [lint, backend-test, e2e-test]
   # Containerized: de key wordt in een wegwerp-container geschreven en
-  # verdwijnt ermee — voorheen bleef ~/.ssh/mindmap_deploy op de
+  # verdwijnt ermee -- voorheen bleef ~/.ssh/mindmap_deploy op de
   # shell-runner-host achter, leesbaar voor elke andere shell-job.
   image: debian:bookworm-slim
-  tags: [docker]
   variables:
     GIT_STRATEGY: none
   rules:
@@ -90,17 +94,17 @@ deploy:
     - echo "Deploying to root@$MINDMAP_HOST:$MINDMAP_PATH ..."
     - >
       ssh -o StrictHostKeyChecking=no -i ~/.ssh/mindmap_deploy root@$MINDMAP_HOST
-      "cd $MINDMAP_PATH && git pull && echo '✓ git pull done'"
+      "cd $MINDMAP_PATH && git pull && echo '[OK] git pull done'"
     - |
       echo "Smoke-checking https://mindmap.apps.aukes.com ..."
       for i in 1 2 3; do
         if curl -fsS "https://mindmap.apps.aukes.com/api/index.php?action=me" >/dev/null; then
-          echo "✓ smoke OK — prod is responding"
+          echo "[OK] smoke OK -- prod is responding"
           exit 0
         fi
         sleep 2
       done
-      echo "✗ smoke failed — prod might be broken, check Apache + PHP error_log on sebas"
+      echo "[FAIL] smoke failed -- prod might be broken, check Apache + PHP error_log on sebas"
       exit 1
   environment:
     name: production
